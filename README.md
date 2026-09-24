@@ -23,9 +23,12 @@ SEO Machine is built on Claude Code and provides:
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/[your-username]/seomachine.git
+git clone https://github.com/TheCraigHewitt/seomachine.git
 cd seomachine
 ```
+
+> Planning to contribute? Fork this repo first, then clone your fork instead:
+> `git clone https://github.com/<your-username>/seomachine.git`
 
 2. Install Python dependencies for analysis modules:
 ```bash
@@ -58,6 +61,17 @@ claude-code .
    - `context/seo-guidelines.md` - Review and adjust SEO requirements
 
    **Quick Start**: Check out `examples/castos/` to see a complete real-world example of all context files filled out for a podcast hosting SaaS company.
+
+## Docker Setup
+
+Before running Docker, configure `data_sources/config/.env` with your credentials.
+
+```bash
+docker-compose build
+docker-compose run seomachine bash
+```
+
+Content directories are mounted as volumes, so files in `topics/`, `research/`, `drafts/`, `published/`, `output/`, `rewrites/`, `context/`, and `credentials/` persist on your host.
 
 ## Workflows
 

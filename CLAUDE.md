@@ -26,8 +26,11 @@ All commands are defined in `.claude/commands/` and invoked as slash commands:
 - `/performance-review` - Analytics-driven content priorities
 - `/publish-draft [file]` - Publish to WordPress via REST API
 - `/article [topic]` - Simplified article creation
+- `/cluster [topic]` - Build complete topic cluster strategy with pillar + supporting articles + linking map
 - `/priorities` - Content prioritization matrix
 - `/research-serp`, `/research-gaps`, `/research-trending`, `/research-performance`, `/research-topics` - Specialized research commands
+- `/research-ai-citations [topic]` - AI citation audit: generates prompts, clusters them, audits which sources AI cites
+- `/repurpose [file]` - Adapts article for LinkedIn, Medium, Reddit, Quora distribution
 - `/landing-write`, `/landing-audit`, `/landing-research`, `/landing-publish`, `/landing-competitor` - Landing page commands
 
 ## Architecture
@@ -36,7 +39,7 @@ All commands are defined in `.claude/commands/` and invoked as slash commands:
 
 **Commands** (`.claude/commands/`) orchestrate workflows. **Agents** (`.claude/agents/`) are specialized roles invoked by commands. After `/write`, these agents auto-run: SEO Optimizer, Meta Creator, Internal Linker, Keyword Mapper.
 
-Key agents: `content-analyzer.md`, `seo-optimizer.md`, `meta-creator.md`, `internal-linker.md`, `keyword-mapper.md`, `editor.md`, `headline-generator.md`, `cro-analyst.md`, `performance.md`.
+Key agents: `content-analyzer.md`, `seo-optimizer.md`, `meta-creator.md`, `internal-linker.md`, `keyword-mapper.md`, `editor.md`, `headline-generator.md`, `cro-analyst.md`, `performance.md`, `cluster-strategist.md`.
 
 ### Python Analysis Pipeline
 
@@ -82,7 +85,7 @@ python3 test_dataforseo.py
 
 `topics/` (ideas) → `research/` (briefs) → `drafts/` (articles) → `review-required/` (pending review) → `published/` (final)
 
-Rewrites go to `rewrites/`. Landing pages go to `landing-pages/`. Audits go to `audits/`.
+Rewrites go to `rewrites/`. Landing pages go to `landing-pages/`. Audits go to `audits/`. Repurposed content goes to `repurposed/`.
 
 ## Context Files
 
@@ -94,6 +97,8 @@ Rewrites go to `rewrites/`. Landing pages go to `landing-pages/`. Audits go to `
 - `features.md` - Product features
 - `competitor-analysis.md` - Competitive intelligence
 - `cro-best-practices.md` - Conversion optimization guidelines
+- `ai-citation-targets.md` - Directories/platforms where your brand should be cited by AI tools
+- `reddit-strategy.md` - Reddit engagement strategy for AI SEO and community visibility
 
 ## WordPress Integration
 
