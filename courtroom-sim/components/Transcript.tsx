@@ -16,7 +16,11 @@ const STYLE: Record<string, string> = {
 
 export default function Transcript({ lines, pending }: { lines: TranscriptLine[]; pending: boolean }) {
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [lines.length, pending]);
+  useEffect(() => {
+    // Block body: newer browsers return a Promise from smooth scrollIntoView,
+    // which React would otherwise treat as an effect cleanup function.
+    end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [lines.length, pending]);
   return (
     <div className="scrollbar-thin h-full overflow-y-auto pr-2 font-serif text-[17px] leading-relaxed">
       {lines.length === 0 && <p className="text-ink">The courtroom is silent. Press the gold button below to begin.</p>}

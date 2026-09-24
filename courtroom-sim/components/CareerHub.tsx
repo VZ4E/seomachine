@@ -17,7 +17,7 @@ const CAT_COLORS: Record<string, string> = {
 
 export default function CareerHub({ cases, ai }: { cases: DocketCase[]; ai: string | null }) {
   const [career, setCareer] = useState<Career>(EMPTY);
-  useEffect(() => setCareer(loadCareer()), []);
+  useEffect(() => { setCareer(loadCareer()); }, []);
   const rank = rankFor(career.points);
   const togglePractice = () => { const c = { ...career, practice: !career.practice }; saveCareer(c); setCareer(c); };
 
