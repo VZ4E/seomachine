@@ -31,7 +31,11 @@ describe.each(files)("case file %s", (file) => {
     const realName = (c.basedOn.name.split(/\bv\.?\s/)[1] ?? "")
       .split(/[^A-Za-z]+/)
       .filter((w) => /^[A-Z][a-z]{3,}$/.test(w) && !COMMON.has(w));
-    const playable = JSON.stringify({ ...c, basedOn: undefined });
+    // Character names and narrative only: legal citations (e.g. "United States v. Mejia" as precedent) are fine.
+    const playable = JSON.stringify([
+      c.title, c.tagline, c.caseSummary, c.prosecutionTheory, c.defendant, c.judge.name, c.prosecutor.name,
+      c.witnesses.map((w) => [w.name, w.publicTestimony, w.hiddenFacts, w.priorStatements]),
+    ]);
     realName.forEach((n) => expect(playable.includes(n), `real name "${n}" leaked`).toBe(false));
   });
 });
