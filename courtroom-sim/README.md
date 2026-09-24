@@ -24,6 +24,8 @@ The live mic uses the Web Speech API, so use **Chrome, Edge or Safari** and allo
 | `COURT_MODEL_FAST` | Primary model. Handles every courtroom turn and the jury deliberation. Pick a fast model that supports structured JSON output. |
 | `COURT_MODEL_LIGHT` | Lightweight model. It is the fallback when the primary errors, times out (`COURT_MODEL_TIMEOUT_MS`) or returns invalid JSON. It also answers voir dire panel questions first. |
 
+**Is the AI working?** Open http://localhost:3000/api/health. It shows whether your key was loaded (masked), which env files it found, and a live test of each model with the exact error if one fails (bad key, no credits, unknown model ID, network). If a courtroom turn falls back to the offline court, the warning on screen gives the reason too.
+
 The output is type-safe end to end. Each request sends a JSON Schema generated from zod (`lib/engine/schema.ts`), and each response is validated against the same zod schema. Out-of-range values are then clamped (`sanitizeTurn`), so a misbehaving model can't break the game. If both models fail, the offline court handles that turn so the trial keeps going.
 
 ## How a trial works

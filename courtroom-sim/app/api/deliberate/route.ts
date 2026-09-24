@@ -3,7 +3,7 @@ import { getCase } from "@/lib/cases";
 import { callModel, hasKey } from "@/lib/ai/openrouter";
 import { mockDeliberation } from "@/lib/ai/mock";
 import { deliberationPrompt, systemPrompt } from "@/lib/engine/prompts";
-import { Deliberation } from "@/lib/engine/schema";
+import { coerceDeliberation, Deliberation } from "@/lib/engine/schema";
 import type { TrialState } from "@/lib/engine/state";
 
 export const runtime = "nodejs";
@@ -28,6 +28,8 @@ export async function POST(req: Request) {
     const r = await callModel({
       schema: Deliberation,
       schemaName: "deliberation",
+      prepare: coerceDeliberation,
+      timeoutMs: 45000,
       system: systemPrompt(c),
       user: deliberationPrompt(c, state),
       temperature: 0.7,
@@ -35,7 +37,8 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ result: finalize(r.data), model: r.model });
   } catch (e) {
-    console.error("deliberation failed", e);
-    return NextResponse.json({ result: finalize(mockDeliberation(c, state)), model: "offline-mock", warning: "AI unavailable; verdict computed from juror leans." });
+    const reason = e instanceof Error ? e.message : String(e);
+    console.error("[deliberate] AI deliberation failed:", reason);
+    return NextResponse.json({ result: finalize(mockDeliberation(c, state)), model: "offline-mock", warning: `AI jury unavailable; verdict computed from juror leans. Reason: ${reason}` });
   }
 }

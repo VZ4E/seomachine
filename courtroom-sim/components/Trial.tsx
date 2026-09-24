@@ -332,7 +332,12 @@ export default function Trial({ c }: { c: CaseFile }) {
             </div>
           )}
 
-          {notice && <p className="rounded-md border border-caution/40 bg-caution/10 px-3 py-2 text-xs text-caution">{notice}</p>}
+          {notice && (
+            <p className="rounded-md border border-caution/40 bg-caution/10 px-3 py-2 text-xs text-caution">
+              {notice}
+              {/unavailable/i.test(notice) && <> · <a href="/api/health" target="_blank" rel="noreferrer" className="underline">Run AI diagnostics</a></>}
+            </p>
+          )}
 
           <div className="flex flex-wrap items-center gap-2">
             {controls}

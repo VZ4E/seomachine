@@ -49,8 +49,9 @@ export default function CareerHub({ cases, ai }: { cases: DocketCase[]; ai: stri
 
       <div className="mb-6 flex flex-wrap items-center gap-3 text-sm">
         <span className={`rounded-full px-3 py-1 ${ai ? "bg-acquit/20 text-acquit" : "bg-caution/20 text-caution"}`}>
-          {ai ? `AI court live · ${ai}` : "Offline court (set OPENROUTER_API_KEY for full AI)"}
+          {ai ? `AI key loaded · ${ai}` : "Offline court (set OPENROUTER_API_KEY for full AI)"}
         </span>
+        <a href="/api/health" target="_blank" rel="noreferrer" className="text-xs text-brass underline">Test AI connection</a>
         <label className="flex cursor-pointer items-center gap-2 text-ink">
           <input type="checkbox" checked={career.practice} onChange={togglePractice} className="accent-[#c9a45c]" />
           Practice mode (unlock every case)

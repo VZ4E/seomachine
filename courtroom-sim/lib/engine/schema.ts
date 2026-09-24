@@ -59,6 +59,84 @@ export const Deliberation = z.object({
 });
 export type Deliberation = z.infer<typeof Deliberation>;
 
+// ---- Lenient coercion ------------------------------------------------------------------
+// Models (especially small fallback ones) often drop empty fields, capitalise enum values,
+// or send numbers as strings. Coerce toward the schema before validating so a nearly-right
+// reply is accepted instead of discarded.
+
+type Obj = Record<string, unknown>;
+const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : v == null ? [] : [v]);
+const str = (v: unknown) => (v == null ? "" : String(v));
+const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? Math.round(n) : 0; };
+const bool = (v: unknown) => v === true || v === "true" || v === 1;
+const pick = <T extends string>(v: unknown, allowed: readonly T[], alias: Record<string, T>, fallback: T): T => {
+  const k = str(v).toLowerCase().trim().replace(/[\s_]+/g, "-");
+  return (allowed as readonly string[]).includes(k) ? (k as T) : alias[k] ?? fallback;
+};
+
+const SPEAKER_ALIAS: Record<string, (typeof SPEAKERS)[number]> = {
+  court: "judge", "the-court": "judge", prosecution: "prosecutor", state: "prosecutor", ada: "prosecutor",
+  da: "prosecutor", government: "prosecutor", "prospective-juror": "juror", panelist: "juror", accused: "defendant",
+};
+const RESULTS = ["sustained", "overruled", "granted", "denied", "granted-in-part"] as const;
+
+/** Unwraps `{ "court_turn": {...} }`-style envelopes some models add. */
+function unwrap(raw: unknown, key: string): Obj {
+  if (!isObj(raw)) return {};
+  if (key in raw || Object.keys(raw).length !== 1) return raw;
+  const only = Object.values(raw)[0];
+  return isObj(only) ? only : raw;
+}
+
+export function coerceTurn(raw: unknown): unknown {
+  const r = unwrap(raw, "lines");
+  const ruling = isObj(r.ruling) && r.ruling.result
+    ? {
+        on: str(r.ruling.on) || "Ruling",
+        result: pick(r.ruling.result, RESULTS, { sustain: "sustained", overrule: "overruled", grant: "granted", deny: "denied" }, "overruled"),
+        reason: str(r.ruling.reason),
+        favorsDefense: bool(r.ruling.favorsDefense),
+      }
+    : null;
+  return {
+    lines: arr(r.lines).filter(isObj).map((l) => ({
+      speaker: pick(l.speaker, SPEAKERS, SPEAKER_ALIAS, "witness"),
+      name: str(l.name) || str(l.speaker),
+      text: str(l.text ?? l.dialogue ?? l.content),
+    })),
+    ruling,
+    prosecutorObjected: bool(r.prosecutorObjected),
+    evidenceAdmitted: arr(r.evidenceAdmitted).map(str),
+    evidenceExcluded: arr(r.evidenceExcluded).map(str),
+    factsRevealed: arr(r.factsRevealed).filter(isObj).map((f) => ({ witnessId: str(f.witnessId), fact: str(f.fact) })).filter((f) => f.fact),
+    jurorReactions: arr(r.jurorReactions).filter(isObj).map((j) => ({ seat: num(j.seat), delta: num(j.delta), reason: str(j.reason) })),
+    scoreEvents: arr(r.scoreEvents).filter(isObj).map((e) => ({ label: str(e.label), points: num(e.points) })).filter((e) => e.label),
+    jurorsRevealed: arr(r.jurorsRevealed).map(num).filter((n) => n > 0),
+    contemptWarning: bool(r.contemptWarning),
+    witnessExcused: bool(r.witnessExcused),
+    countsDismissed: arr(r.countsDismissed).map(str),
+  };
+}
+
+const VERDICTS = ["guilty", "not-guilty", "hung", "guilty-lesser"] as const;
+
+export function coerceDeliberation(raw: unknown): unknown {
+  const r = unwrap(raw, "verdicts");
+  return {
+    transcript: arr(r.transcript).filter(isObj).map((l) => ({ seat: num(l.seat), name: str(l.name), text: str(l.text) })),
+    verdicts: arr(r.verdicts).filter(isObj).map((v) => ({
+      chargeId: str(v.chargeId),
+      result: pick(v.result, VERDICTS, { "not guilty": "not-guilty", notguilty: "not-guilty", acquitted: "not-guilty", "hung-jury": "hung", mistrial: "hung", lesser: "guilty-lesser" }, "hung"),
+      lesser: v.lesser == null || v.lesser === "" ? null : str(v.lesser),
+      votesNotGuilty: Math.max(0, Math.min(12, num(v.votesNotGuilty))),
+    })),
+    foreperson: str(r.foreperson) || "Foreperson",
+    keyFactor: str(r.keyFactor),
+    critique: arr(r.critique).map(str).filter(Boolean),
+  };
+}
+
 const clampInt = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(n)));
 
 /** Normalises model output so a misbehaving model can't break game balance. */
