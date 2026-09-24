@@ -27,7 +27,7 @@
     "name": "Cody Wexler",
     "age": 17,
     "background": "A lifeguard and former police-cadet program member from a town across the Illinois state line. His older friend bought an AR-15-style rifle for him with Cody's stimulus money and kept it at his stepfather's house in Port Adler. During the second night of unrest after a police shooting, Cody joined armed men who said they were guarding a car dealership. He also carried a medic bag.",
-    "privateAccount": "He says he went to protect property and give first aid. A man he had never met (Joseph Keane) had threatened the group earlier, saying 'if I catch any of you alone tonight I'm going to kill you.' When Keane chased him into a parking lot and lunged for his rifle, he fired. He ran toward police to turn himself in and was chased by a crowd shouting 'get him.' He was kicked and struck with a skateboard, and he fired at the man who hit him. He lowered his rifle when a third man put his hands up, then fired when that man lunged at him with a pistol. He admits he told a reporter earlier that night that 'if someone is hurt I'm running into harm's way,' and that he was not legally old enough to buy the gun. He also admits that two weeks earlier, watching a video of men leaving a pharmacy, he said he wished he had his rifle to 'start shooting rounds at them.'",
+    "privateAccount": "He says he went to protect property and give first aid. A man he had never met (Martin Keane) had threatened the group earlier, saying 'if I catch any of you alone tonight I'm going to kill you.' When Keane chased him into a parking lot and lunged for his rifle, he fired. He ran toward police to turn himself in and was chased by a crowd shouting 'get him.' He was kicked and struck with a skateboard, and he fired at the man who hit him. He lowered his rifle when a third man put his hands up, then fired when that man lunged at him with a pistol. He admits he told a reporter earlier that night that 'if someone is hurt I'm running into harm's way,' and that he was not legally old enough to buy the gun. He also admits that two weeks earlier, watching a video of men leaving a pharmacy, he said he wished he had his rifle to 'start shooting rounds at them.'",
     "priors": "None.",
     "testifyRisk": "High emotional impact either way. He could break down sobbing on the stand, which could humanize him. The State will cross on why he came armed to a city where he didn't live, on his earlier 'shoot rounds at them' remark (if the court's ruling is violated or the door is opened), and on whether he pointed his rifle at anyone before the first shooting. If he testifies he waives his silence, and the prosecutor may improperly comment on his post-arrest silence, which could produce a mistrial motion."
   },
@@ -40,7 +40,7 @@
     "name": "Assistant District Attorney Thomas Harlan",
     "style": "Aggressive and theatrical. He will point the rifle at the jury to make a point. He argues the defendant was a 'chaos tourist' who provoked the confrontation, and he pushes the bounds of the judge's rulings. He relies heavily on blurry enhanced images to argue provocation."
   },
-  "caseSummary": "On the second night of rioting after a police shooting in Port Adler, Wisconsin, 17-year-old Cody Wexler was among armed civilians near a used-car lot. Shortly before midnight he was chased across a parking lot by Joseph Keane, 36, who threw a plastic bag at him. A third party fired a handgun into the air. Keane lunged toward Wexler's rifle, and Wexler fired four shots in under a second, killing Keane. Wexler called a friend and said 'I just shot somebody,' then ran toward the police line.\n\nA crowd chased him. He tripped and fell. A man jump-kicked him, and he fired twice and missed. Anthony Hale, 26, struck him with a skateboard and grabbed the rifle; Wexler fired once and killed Hale. Gavin Ruiz, 26, a volunteer medic carrying a concealed pistol, approached with his hands up. When Ruiz moved toward Wexler with the pistol in his hand, Wexler fired once and wounded Ruiz in the arm. Wexler walked to the police line with his hands up, was waved through, and turned himself in the next morning in his hometown.",
+  "caseSummary": "On the second night of rioting after a police shooting in Port Adler, Wisconsin, 17-year-old Cody Wexler was among armed civilians near a used-car lot. Shortly before midnight he was chased across a parking lot by Martin Keane, 36, who threw a plastic bag at him. A third party fired a handgun into the air. Keane lunged toward Wexler's rifle, and Wexler fired four shots in under a second, killing Keane. Wexler called a friend and said 'I just shot somebody,' then ran toward the police line.\n\nA crowd chased him. He tripped and fell. A man jump-kicked him, and he fired twice and missed. Derek Hale, 26, struck him with a skateboard and grabbed the rifle; Wexler fired once and killed Hale. Gavin Ruiz, 26, a volunteer medic carrying a concealed pistol, approached with his hands up. When Ruiz moved toward Wexler with the pistol in his hand, Wexler fired once and wounded Ruiz in the arm. Wexler walked to the police line with his hands up, was waved through, and turned himself in the next morning in his hometown.",
   "prosecutionTheory": "Wexler was an armed minor who had no business on the streets of Port Adler. He provoked the first confrontation by pointing his rifle at people, which strips him of self-defense under § 939.48(2). Everything that followed came from his own unlawful conduct: the crowd was trying to stop an 'active shooter.' Keane was unarmed, Hale had only a skateboard, and Ruiz was trying to help.",
   "charges": [
     {
@@ -48,7 +48,7 @@
       "name": "First-Degree Reckless Homicide, Use of a Dangerous Weapon (Keane)",
       "statute": "Wis. Stat. §§ 940.02(1), 939.63(1)(b)",
       "elements": [
-        "The defendant caused the death of Joseph Keane.",
+        "The defendant caused the death of Martin Keane.",
         "The defendant caused the death by criminally reckless conduct (conduct creating an unreasonable and substantial risk of death or great bodily harm, of which the defendant was aware).",
         "The circumstances showed utter disregard for human life.",
         "The State must also disprove privilege (self-defense) beyond a reasonable doubt."
@@ -63,7 +63,7 @@
       "name": "First-Degree Intentional Homicide, Use of a Dangerous Weapon (Hale)",
       "statute": "Wis. Stat. §§ 940.01(1)(a), 939.63(1)(b)",
       "elements": [
-        "The defendant caused the death of Anthony Hale.",
+        "The defendant caused the death of Derek Hale.",
         "The defendant acted with intent to kill.",
         "The State must disprove self-defense beyond a reasonable doubt. If the defendant actually but unreasonably believed deadly force was necessary, the offense is mitigated to second-degree intentional homicide (§ 940.01(2)(b), imperfect self-defense)."
       ],
@@ -212,7 +212,7 @@
     },
     {
       "id": "w2",
-      "name": "Rory McAllister",
+      "name": "Rory Dunmore",
       "role": "Journalist and livestream videographer",
       "side": "prosecution",
       "demeanor": "A precise, articulate former military officer who's now an online commentator. He is anxious about being seen as partisan and wants to 'just state what I saw.'",
@@ -275,7 +275,7 @@
     },
     {
       "id": "w5",
-      "name": "Dominic Voss",
+      "name": "Travis Voss",
       "role": "Friend who bought the rifle (possible defense witness, testifying under his own pending charges)",
       "side": "defense",
       "demeanor": "Nervous 19-year-old, guilt-ridden about the straw purchase. He will invoke the Fifth unless immunized.",

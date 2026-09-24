@@ -194,7 +194,7 @@
     },
     {
       "id": "w2",
-      "name": "Jenna Holcomb",
+      "name": "Brooke Holcomb",
       "role": "Mercer's friend (corroborating witness)",
       "side": "prosecution",
       "demeanor": "Nervous, cooperative with police because her lawyer told her to be. Says 'I don't remember' often.",
@@ -215,7 +215,7 @@
     },
     {
       "id": "w3",
-      "name": "Abraham Wharton",
+      "name": "Leonard Pryce",
       "role": "Radio-frequency engineer (State's cell expert)",
       "side": "prosecution",
       "demeanor": "Precise, technical, and honest. He answers exactly what's asked. When shown new information, he's willing to reconsider.",
@@ -235,7 +235,7 @@
     },
     {
       "id": "w4",
-      "name": "Detective Walter Rinaldi",
+      "name": "Detective Glenn Osterhout",
       "role": "Lead homicide detective",
       "side": "prosecution",
       "demeanor": "An experienced homicide detective who is patient and guarded and has a reputation for getting witnesses to 'remember.' He resents questions about his interview methods.",

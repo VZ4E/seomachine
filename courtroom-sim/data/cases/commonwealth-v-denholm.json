@@ -40,7 +40,7 @@
     "name": "Special Prosecutor Hank O'Rourke",
     "style": "A seasoned trial lawyer brought in after the first trial collapsed. He is folksy and relentless. He keeps the case simple: she was drunk, she was angry, she backed into him, and she said 'I hit him.' He will try to keep the discredited trooper off the stand."
   },
-  "caseSummary": "At about 6 a.m. on January 29, during a blizzard, Officer Sean Callahan, 46, was found unresponsive on the front lawn of 34 Fairview Road in Milbrook, the home of fellow officer Sgt. Kevin Doherty. He died of hypothermia and blunt-force head injuries. Claire Denholm had dropped Callahan at the house after midnight. Witnesses inside say he never came in.\n\nWhen she searched for him at dawn with two friends, one of them, Jillian Ahearn, says Denholm repeatedly said 'I hit him.' Paramedics and a fire captain also say they heard her say 'I hit him.' The right rear taillight of her SUV was cracked, and investigators later found pieces of red and clear plastic in the snow near where he lay. Vehicle data showed her SUV reversing at 24 mph at 12:32 a.m. Callahan had cuts on his right arm and a swollen eye.\n\nState Police Trooper Mitchell Crane led the investigation. His texts about Denholm ('whack job,' and comments about her medical condition) were revealed at the first trial. He was later fired.",
+  "caseSummary": "At about 6 a.m. on January 29, during a blizzard, Officer Sean Callahan, 46, was found unresponsive on the front lawn of 34 Fairview Road in Milbrook, the home of fellow officer Sgt. Kevin Doherty. He died of hypothermia and blunt-force head injuries. Claire Denholm had dropped Callahan at the house after midnight. Witnesses inside say he never came in.\n\nWhen she searched for him at dawn with two friends, one of them, Jillian Ahearn, says Denholm repeatedly said 'I hit him.' Paramedics and a fire captain also say they heard her say 'I hit him.' The right rear taillight of her SUV was cracked, and investigators later found pieces of red and clear plastic in the snow near where he lay. Vehicle data showed her SUV reversing at 24 mph at 12:32 a.m. Callahan had cuts on his right arm and a swollen eye.\n\nState Police Trooper Dale Crane led the investigation. His texts about Denholm ('whack job,' and comments about her medical condition) were revealed at the first trial. He was later fired.",
   "prosecutionTheory": "Denholm was drunk and furious with Callahan. When she dropped him off, she backed up at 24 mph, struck him with her rear bumper, and drove away, leaving him to die in the snow. She knew what she had done: she said 'I hit him' to three people. The taillight fragments and the arm injuries match the SUV.",
   "charges": [
     {
@@ -161,7 +161,7 @@
   "witnesses": [
     {
       "id": "w1",
-      "name": "Trooper Mitchell Crane",
+      "name": "Trooper Dale Crane",
       "role": "Lead state police investigator (now terminated)",
       "side": "prosecution",
       "demeanor": "Cocky, defensive, and prone to smirking; a liability for the Commonwealth. He is apologetic about the texts but insists they didn't affect the investigation.",
