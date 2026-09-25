@@ -20,6 +20,14 @@ export default function CareerHub({ cases, ai }: { cases: DocketCase[]; ai: stri
   useEffect(() => { setCareer(loadCareer()); }, []);
   const rank = rankFor(career.points);
   const togglePractice = () => { const c = { ...career, practice: !career.practice }; saveCareer(c); setCareer(c); };
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ wins: 0, hung: 0, losses: 0, points: 0 });
+  const openEditor = () => { setDraft({ wins: career.wins, hung: career.hung, losses: career.losses, points: career.points }); setEditing(true); };
+  const num = (v: string) => Math.max(0, Math.floor(Number(v) || 0));
+  const restore = () => {
+    const c: Career = { ...career, wins: num(String(draft.wins)), hung: num(String(draft.hung)), losses: num(String(draft.losses)), points: num(String(draft.points)) };
+    saveCareer(c); setCareer(c); setEditing(false);
+  };
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
@@ -44,6 +52,25 @@ export default function CareerHub({ cases, ai }: { cases: DocketCase[]; ai: stri
             <div><p className="text-xl font-semibold text-caution">{career.hung}</p><p className="text-ink">Hung/Split</p></div>
             <div><p className="text-xl font-semibold text-guilty">{career.losses}</p><p className="text-ink">Convicted</p></div>
           </div>
+          {editing ? (
+            <div className="mt-3 border-t border-wood-600 pt-3 text-xs">
+              <p className="text-ink">Restore a record this browser lost. Points drive rank; acquittals unlock tiers.</p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {([["wins", "Acquittals"], ["hung", "Hung/Split"], ["losses", "Convicted"], ["points", "Points"]] as const).map(([k, label]) => (
+                  <label key={k} className="flex items-center justify-between gap-2">
+                    <span className="text-ink">{label}</span>
+                    <input type="number" min={0} value={draft[k]} onChange={(e) => setDraft({ ...draft, [k]: num(e.target.value) })} className="w-20 rounded border border-wood-600 bg-black/30 px-1 py-0.5 text-right" />
+                  </label>
+                ))}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <button onClick={restore} className="brass-btn px-3 py-1 text-xs">Save record</button>
+                <button onClick={() => setEditing(false)} className="ghost-btn px-3 py-1 text-xs">Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={openEditor} className="mt-3 text-xs text-ink underline hover:text-brass">Restore record…</button>
+          )}
         </div>
       </header>
 
