@@ -2,15 +2,18 @@
 import Link from "next/link";
 import type { CaseFile } from "@/lib/engine/caseTypes";
 import { grade, outcomeOf, trialPoints } from "@/lib/engine/scoring";
-import type { TrialState } from "@/lib/engine/state";
+import { acquittedCounts, retriableCounts, type TrialState } from "@/lib/engine/state";
 
 const LABEL = { "not-guilty": "NOT GUILTY", guilty: "GUILTY", hung: "HUNG JURY", "guilty-lesser": "GUILTY (lesser)" } as const;
 const COLOR = { "not-guilty": "text-acquit", guilty: "text-guilty", hung: "text-caution", "guilty-lesser": "text-caution" } as const;
 const HEADLINE = { acquittal: "Your client walks free.", hung: "Mistrial: the jury is hung.", partial: "A split verdict.", conviction: "Your client is convicted." };
 
-export default function Verdict({ c, s, onRestart }: { c: CaseFile; s: TrialState; onRestart: () => void }) {
+export default function Verdict({ c, s, onRestart, onRetrial }: { c: CaseFile; s: TrialState; onRestart: () => void; onRetrial: () => void }) {
   const d = s.deliberation!;
   const outcome = outcomeOf(d, s.dismissedCounts);
+  const prior = acquittedCounts(s);
+  const hung = retriableCounts(s);
+  const chargeName = (id: string) => c.charges.find((x) => x.id === id)?.name ?? id;
   const pts = trialPoints(s, outcome);
   const g = grade(pts, outcome);
   const top = [...s.score].sort((a, b) => Math.abs(b.points) - Math.abs(a.points)).slice(0, 8);
@@ -18,9 +21,15 @@ export default function Verdict({ c, s, onRestart }: { c: CaseFile; s: TrialStat
   return (
     <div className="mx-auto max-w-4xl space-y-5 py-6">
       <div className="panel p-6 text-center">
-        <p className="text-sm uppercase tracking-[0.3em] text-brass">The jury has reached a verdict</p>
+        <p className="text-sm uppercase tracking-[0.3em] text-brass">{s.retrial ? `Retrial · round ${s.retrial.round} · ` : ""}The jury has reached a verdict</p>
         <h1 className="mt-2 font-serif text-4xl font-bold">{HEADLINE[outcome]}</h1>
         <div className="mt-4 space-y-1">
+          {prior.map((id) => (
+            <p key={id} className="font-serif text-xl text-ink">
+              {chargeName(id)}: <span className="font-bold text-acquit/70">ACQUITTED</span>
+              <span className="ml-2 text-sm">(prior trial · cannot be retried)</span>
+            </p>
+          ))}
           {d.verdicts.map((v) => {
             const ch = c.charges.find((x) => x.id === v.chargeId);
             return (
@@ -32,6 +41,11 @@ export default function Verdict({ c, s, onRestart }: { c: CaseFile; s: TrialStat
           })}
         </div>
         <p className="mt-4 text-sm text-ink">Foreperson {d.foreperson} · Deciding factor: {d.keyFactor}</p>
+        {hung && (
+          <p className="mt-3 text-sm text-caution">
+            The State may retry {hung.map(chargeName).join(" and ")}. The {hung.length === 1 ? "acquittal" : "acquittals"} on the other {prior.length + d.verdicts.length - hung.length === 1 ? "count stands" : "counts stand"}: jeopardy attached and the State can never bring {prior.length + d.verdicts.length - hung.length === 1 ? "it" : "them"} again.
+          </p>
+        )}
         <div className="mt-5 inline-flex items-center gap-6 rounded-lg border border-brass/40 px-6 py-3">
           <div><p className="text-xs text-ink">Grade</p><p className="font-serif text-4xl text-brass">{g}</p></div>
           <div><p className="text-xs text-ink">Career points</p><p className="font-serif text-3xl">{pts}</p></div>
@@ -73,7 +87,8 @@ export default function Verdict({ c, s, onRestart }: { c: CaseFile; s: TrialStat
 
       <div className="flex justify-center gap-3">
         <Link href="/" className="brass-btn">Back to docket</Link>
-        <button onClick={onRestart} className="ghost-btn">Retry this case</button>
+        {hung && <button onClick={onRetrial} className="brass-btn">Retry the hung {hung.length === 1 ? "count" : "counts"}</button>}
+        <button onClick={onRestart} className="ghost-btn">{hung ? "Restart from scratch" : "Retry this case"}</button>
       </div>
     </div>
   );

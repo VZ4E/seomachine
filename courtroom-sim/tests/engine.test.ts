@@ -3,7 +3,7 @@ import { detectObjection } from "@/lib/engine/objections";
 import { nextPhase, PHASES } from "@/lib/engine/phases";
 import { generateVenire, doubtLevel, seated } from "@/lib/engine/jurors";
 import { sanitizeTurn, type CourtTurn } from "@/lib/engine/schema";
-import { initTrial, reducer, type TrialState } from "@/lib/engine/state";
+import { activeCase, initRetrial, initTrial, reducer, retriableCounts, type TrialState } from "@/lib/engine/state";
 import { grade, outcomeOf, rankFor, tierUnlocked } from "@/lib/engine/scoring";
 import { mockDeliberation, mockTurn } from "@/lib/ai/mock";
 import { publicCase } from "@/lib/engine/witness";
@@ -133,5 +133,44 @@ describe("scoring", () => {
   });
   it("hides witness hidden facts from the browser", () => {
     expect(publicCase(c).witnesses.every((w) => w.hiddenFacts.length === 0)).toBe(true);
+  });
+});
+
+describe("retrial after a hung jury", () => {
+  const verdict = (murder: "hung" | "not-guilty" | "guilty", gang: "hung" | "not-guilty" | "guilty") => ({
+    transcript: [], foreperson: "", keyFactor: "", critique: [],
+    verdicts: [
+      { chargeId: "murder", result: murder, lesser: null, votesNotGuilty: 6 },
+      { chargeId: "gang-enh", result: gang, lesser: null, votesNotGuilty: 6 },
+    ],
+  });
+  it("offers a retrial only when a count hung and nothing was a conviction", () => {
+    const base = initTrial(c, 1);
+    expect(retriableCounts({ ...base, deliberation: verdict("hung", "not-guilty") })).toEqual(["murder"]);
+    expect(retriableCounts({ ...base, deliberation: verdict("hung", "guilty") })).toBeNull();
+    expect(retriableCounts({ ...base, deliberation: verdict("not-guilty", "not-guilty") })).toBeNull();
+    expect(retriableCounts({ ...base, deliberation: verdict("hung", "hung"), dismissedCounts: ["gang-enh"] })).toEqual(["murder"]);
+  });
+  it("starts a fresh trial on the hung count only, and acquittals never come back", () => {
+    const prev = { ...initTrial(c, 1), deliberation: verdict("hung", "not-guilty") };
+    const r = initRetrial(c, prev, 2);
+    expect(r.phase).toBe("arraignment");
+    expect(r.transcript).toEqual([]);
+    expect(r.retrial).toEqual({ round: 2, acquitted: ["gang-enh"] });
+    expect(activeCase(c, r).charges.map((x) => x.id)).toEqual(["murder"]);
+    expect(activeCase(c, prev)).toBe(c);
+    // A second hung jury on murder keeps the earlier acquittal and bumps the round.
+    const again = initRetrial(c, { ...r, deliberation: { ...verdict("hung", "not-guilty"), verdicts: [verdict("hung", "hung").verdicts[0]] } }, 3);
+    expect(again.retrial).toEqual({ round: 3, acquitted: ["gang-enh"] });
+  });
+  it("mock court and jury only see the live count", () => {
+    const prev = { ...initTrial(c, 1), deliberation: verdict("hung", "not-guilty") };
+    const r = initRetrial(c, prev, 2);
+    const live = activeCase(c, r);
+    const d = mockDeliberation(live, r);
+    expect(d.verdicts.map((v) => v.chargeId)).toEqual(["murder"]);
+    const arraign = mockTurn(live, r, { kind: "proceed" }).lines.map((l) => l.text).join(" ");
+    expect(arraign).toContain("Murder");
+    expect(arraign).not.toContain("Gang Enhancement");
   });
 });

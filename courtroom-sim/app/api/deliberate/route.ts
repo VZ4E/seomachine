@@ -4,14 +4,15 @@ import { callModel, hasKey } from "@/lib/ai/openrouter";
 import { mockDeliberation } from "@/lib/ai/mock";
 import { deliberationPrompt, systemPrompt } from "@/lib/engine/prompts";
 import { coerceDeliberation, Deliberation } from "@/lib/engine/schema";
-import type { TrialState } from "@/lib/engine/state";
+import { activeCase, type TrialState } from "@/lib/engine/state";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   const { caseId, state } = (await req.json()) as { caseId: string; state: TrialState };
-  const c = getCase(caseId);
-  if (!c || !state) return NextResponse.json({ error: "Bad request" }, { status: 400 });
+  const full = getCase(caseId);
+  if (!full || !state) return NextResponse.json({ error: "Bad request" }, { status: 400 });
+  const c = activeCase(full, state); // on a retrial, only the hung counts go to this jury
 
   const finalize = (d: Deliberation) => ({
     ...d,

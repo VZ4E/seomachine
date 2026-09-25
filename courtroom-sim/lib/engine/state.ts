@@ -13,6 +13,11 @@ export interface TranscriptLine extends Omit<CourtLineT, "speaker"> {
 
 export interface ScoreEvent { label: string; points: number; phase: PhaseId }
 
+export interface RetrialInfo {
+  round: number; // 2 for the first retrial
+  acquitted: string[]; // charge ids resolved not-guilty in earlier rounds (jeopardy attached; cannot be retried)
+}
+
 export interface TrialState {
   caseId: string;
   phase: PhaseId;
@@ -33,6 +38,8 @@ export interface TrialState {
   contempt: number;
   dismissedCounts: string[];
   deliberation: Deliberation | null;
+  /** Set when this trial is a retrial of counts the last jury hung on. Acquitted counts never come back. */
+  retrial: RetrialInfo | null;
   bail: "remanded" | "released" | null;
   nextId: number;
 }
@@ -58,9 +65,42 @@ export function initTrial(c: CaseFile, seed = hashString(c.id + Date.now())): Tr
     contempt: 0,
     dismissedCounts: [],
     deliberation: null,
+    retrial: null,
     bail: null,
     nextId: 1,
   };
+}
+
+/** Charge ids the defendant can no longer be tried on in this trial. */
+export function acquittedCounts(s: TrialState): string[] {
+  return s.retrial?.acquitted ?? [];
+}
+
+/** Charges still live in this trial: earlier-round acquittals are gone for good. */
+export function activeCase(c: CaseFile, s: TrialState): CaseFile {
+  const gone = new Set(acquittedCounts(s));
+  return gone.size ? { ...c, charges: c.charges.filter((ch) => !gone.has(ch.id)) } : c;
+}
+
+/**
+ * A hung jury ends in a mistrial, and the State may retry the counts the jury could not decide.
+ * Counts the jury acquitted on (or the judge dismissed) are final under the Double Jeopardy Clause.
+ * Returns null unless at least one count hung and none ended in a conviction.
+ */
+export function retriableCounts(s: TrialState): string[] | null {
+  const d = s.deliberation;
+  if (!d) return null;
+  const hung = d.verdicts.filter((v) => v.result === "hung" && !s.dismissedCounts.includes(v.chargeId)).map((v) => v.chargeId);
+  const convicted = d.verdicts.some((v) => (v.result === "guilty" || v.result === "guilty-lesser") && !s.dismissedCounts.includes(v.chargeId));
+  return hung.length && !convicted ? hung : null;
+}
+
+/** Fresh trial (new venire, clean record) on only the counts the last jury hung on. */
+export function initRetrial(c: CaseFile, prev: TrialState, seed?: number): TrialState {
+  const hung = new Set(retriableCounts(prev) ?? []);
+  const acquitted = [...new Set([...acquittedCounts(prev), ...c.charges.map((ch) => ch.id).filter((id) => !hung.has(id))])];
+  const fresh = seed === undefined ? initTrial(c) : initTrial(c, seed);
+  return { ...fresh, retrial: { round: (prev.retrial?.round ?? 1) + 1, acquitted } };
 }
 
 export type Action =

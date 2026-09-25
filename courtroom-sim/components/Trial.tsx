@@ -7,7 +7,7 @@ import { JURY_ABSENT, phaseInfo } from "@/lib/engine/phases";
 import type { PlayerInput } from "@/lib/engine/prompts";
 import type { CourtTurn, Deliberation } from "@/lib/engine/schema";
 import { grade, outcomeOf, trialPoints } from "@/lib/engine/scoring";
-import { initTrial, reducer, type Action, type TrialState } from "@/lib/engine/state";
+import { acquittedCounts, initRetrial, initTrial, reducer, type Action, type TrialState } from "@/lib/engine/state";
 import { bareJudge, DEFENDANT_ID, witnessById } from "@/lib/engine/witness";
 import { clearTrial, loadTrial, recordTrial, saveTrial } from "@/lib/career";
 import { silence, speakLines } from "@/lib/speech/voices";
@@ -117,8 +117,20 @@ export default function Trial({ c }: { c: CaseFile }) {
     setNotice(null);
   };
 
+  // Mistrial on some counts: a new jury hears only those. Acquittals are final.
+  const retrial = () => {
+    const cur = ref.current;
+    if (!cur) return;
+    silence();
+    const fresh = initRetrial(c, cur);
+    ref.current = fresh;
+    setS(fresh);
+    saveTrial(fresh);
+    setNotice(null);
+  };
+
   if (s.phase === "verdict" && s.deliberation) {
-    return <main className="px-4"><Verdict c={c} s={s} onRestart={restart} /></main>;
+    return <main className="px-4"><Verdict c={c} s={s} onRestart={restart} onRetrial={retrial} /></main>;
   }
 
   const info = phaseInfo(s.phase);
@@ -269,6 +281,11 @@ export default function Trial({ c }: { c: CaseFile }) {
           <Link href={`/case/${c.id}`} className="text-xs text-brass hover:underline">← Case file</Link>
           <h1 className="font-serif text-2xl font-bold leading-tight sm:text-3xl">{c.title}</h1>
           <p className="text-xs text-ink">{c.courtName} · Hon. {bareJudge(c)} presiding · For the State: {c.prosecutor.name}{s.bail ? ` · Client ${s.bail}` : ""}</p>
+          {s.retrial && (
+            <p className="mt-1 text-xs text-caution">
+              Retrial · round {s.retrial.round} · Acquitted last time: {acquittedCounts(s).map((id) => c.charges.find((x) => x.id === id)?.name ?? id).join(", ")} · Still on trial: {c.charges.filter((x) => !acquittedCounts(s).includes(x.id)).map((x) => x.name).join(", ")}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 text-xs">
           <span key={gavel} className={gavel ? "gavel-strike text-2xl" : "text-2xl"}>🔨</span>

@@ -40,6 +40,12 @@ CASE FILE (confidential to the engine):
 ${JSON.stringify(playable)}`;
 }
 
+function retrialNote(s: TrialState): string {
+  if (!s.retrial) return "";
+  return `RETRIAL (round ${s.retrial.round}): the first jury hung on the remaining count(s) and a mistrial was declared. The defendant was ACQUITTED of: ${s.retrial.acquitted.join(", ") || "none"}. Those counts are final (double jeopardy) and must not be charged, argued, or mentioned as pending. Only the charges in the case file are before this court. This is a new jury with no memory of the first trial, but the lawyers know the prior testimony and may impeach witnesses with it.
+`;
+}
+
 function jurySummary(s: TrialState): string {
   if (s.phase === "voir_dire") {
     return s.jurors
@@ -87,7 +93,7 @@ export function turnPrompt(c: CaseFile, s: TrialState, input: PlayerInput): stri
       break;
   }
 
-  return `PHASE: ${p.label}. ${p.direction}
+  return `${retrialNote(s)}PHASE: ${p.label}. ${p.direction}
 ${witness ? `CURRENT WITNESS: ${witness.name} (${witness.role}, ${witness.side} witness, id ${witness.id}). Examination: ${s.examMode}.` : ""}
 JURY ${JURY_ABSENT.includes(s.phase) ? "IS NOT PRESENT (jurorReactions must be empty)" : "IS PRESENT"}.
 ${s.phase === "voir_dire" ? "PANEL:" : "SEATED JURY:"}
@@ -109,7 +115,7 @@ export function deliberationPrompt(c: CaseFile, s: TrialState): string {
     .map((j, i) => `Seat ${i + 1} ${j.name} (${j.occupation}; bias: ${j.bias}) lean=${j.lean}`)
     .join("\n");
   const transcript = s.transcript.map((l) => `${l.name}: ${l.text}`).join("\n").slice(-24000);
-  return `The jury retires to deliberate in ${c.title}. Charges: ${c.charges
+  return `${retrialNote(s)}The jury retires to deliberate in ${c.title}. Charges: ${c.charges
     .map((ch) => `${ch.id}: ${ch.name} — elements: ${ch.elements.join("; ")}${ch.lesserIncluded?.length ? ` — lesser included: ${ch.lesserIncluded.join(", ")}` : ""}`)
     .join(" | ")}.
 Counts already dismissed by the judge (verdict must be not-guilty): ${s.dismissedCounts.join(", ") || "none"}.
