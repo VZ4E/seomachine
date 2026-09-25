@@ -85,6 +85,16 @@ export default function PriorTrialNotes({ c, s }: { c: CaseFile; s: TrialState }
           </section>
         )}
 
+        <section>
+          <h4 className="font-semibold text-brass">Plan for round {s.retrial.round}</h4>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {p.revealed.map((r, i) => <li key={i}>Lead with it, don&apos;t rediscover it: {r.fact}</li>)}
+            {witnesses.map((w) => <li key={w.name}>{w.name} gave {w.pairs.length} sworn answers. Read them before cross; lock the witness to each one before you spring the contradiction.</li>)}
+            {p.motionsHeard && Object.entries(p.motionsHeard).some(([, r]) => r === "denied") && <li>Re-argue the denied motion only with new grounds or new facts from the record. The judge already ruled once.</li>}
+            <li>Voir dire is a clean slate. The biases that hung the last jury will be in this panel too.</li>
+          </ul>
+        </section>
+
         {witnesses.length > 0 && (
           <section>
             <h4 className="font-semibold text-brass">Sworn testimony, by witness</h4>

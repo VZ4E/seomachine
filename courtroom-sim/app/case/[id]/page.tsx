@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCase } from "@/lib/cases";
+import { publicCase } from "@/lib/engine/witness";
+import { ChargeStatus, RetrialBanner } from "@/components/CaseFileStatus";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +10,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const c = getCase(id);
   if (!c) notFound();
+  const pub = publicCase(c); // safe to ship to the browser: no hidden facts
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
@@ -22,6 +25,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
       </header>
 
       <div className="grid gap-5 lg:grid-cols-3">
+        <RetrialBanner c={pub} />
         <section className="panel p-5 lg:col-span-2">
           <h2 className="mb-2 font-serif text-2xl">Charging narrative</h2>
           <p className="whitespace-pre-line text-sm leading-relaxed">{c.caseSummary}</p>
@@ -48,6 +52,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
                 <p className="text-xs text-ink">{ch.statute} · Max: {ch.maxSentence}</p>
                 <ol className="mt-2 list-decimal pl-5 text-sm">{ch.elements.map((e) => <li key={e}>{e}</li>)}</ol>
                 {ch.lesserIncluded?.length ? <p className="mt-1 text-xs text-ink">Lesser included: {ch.lesserIncluded.join(", ")}</p> : null}
+                <ChargeStatus c={pub} chargeId={ch.id} />
               </div>
             ))}
           </div>
