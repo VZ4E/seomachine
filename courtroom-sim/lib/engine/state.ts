@@ -144,13 +144,32 @@ export function priorTrialRecord(prev: TrialState): PriorTrial {
   };
 }
 
+/**
+ * Law of the case: pretrial rulings from the last trial bind the retrial. Motions the judge granted stay
+ * granted (and their evidence stays out); denied motions may be re-argued on new grounds, so they are left open.
+ */
+export function applyPriorRulings(c: CaseFile, s: TrialState, prior: PriorTrial): TrialState {
+  const motionsHeard = { ...s.motionsHeard };
+  const excluded = new Set(s.excluded);
+  for (const [name, r] of Object.entries(prior.motionsHeard)) {
+    if (r === "denied") continue;
+    motionsHeard[name] = r;
+    const m = c.pretrialMotions.find((x) => x.name === name);
+    if (r === "granted") for (const id of m?.targets ?? []) excluded.add(id);
+  }
+  for (const id of prior.excluded) excluded.add(id);
+  return { ...s, motionsHeard, excluded: [...excluded] };
+}
+
 /** Fresh trial (new venire, clean record) on only the counts the last jury hung on. The first trial's record comes along. */
 export function initRetrial(c: CaseFile, prev: TrialState, seed?: number): TrialState {
   const hung = new Set(retriableCounts(prev) ?? []);
   const acquitted = [...new Set([...acquittedCounts(prev), ...c.charges.map((ch) => ch.id).filter((id) => !hung.has(id))])];
   const fresh = seed === undefined ? initTrial(c) : initTrial(c, seed);
   const acquittedNames = acquitted.map((id) => c.charges.find((ch) => ch.id === id)?.name ?? id);
-  return { ...fresh, retrial: { round: (prev.retrial?.round ?? 1) + 1, acquitted, acquittedNames, prior: [...(prev.retrial?.prior ?? []), priorTrialRecord(prev)] } };
+  const record = priorTrialRecord(prev);
+  const next = { ...fresh, retrial: { round: (prev.retrial?.round ?? 1) + 1, acquitted, acquittedNames, prior: [...(prev.retrial?.prior ?? []), record] } };
+  return applyPriorRulings(c, next, record);
 }
 
 export type Action =

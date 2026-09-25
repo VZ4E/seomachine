@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import type { CaseFile } from "@/lib/engine/caseTypes";
 import { loadTrial, saveTrial } from "@/lib/career";
-import { acquittedCounts, initRetrial, retriableCounts, type TrialState } from "@/lib/engine/state";
+import { acquittedCounts, applyPriorRulings, initRetrial, retriableCounts, type PriorTrial, type TrialState } from "@/lib/engine/state";
 import { parsePriorTrial } from "@/lib/engine/transcriptImport";
 import PriorTrialNotes from "./PriorTrialNotes";
 
@@ -52,14 +52,22 @@ export function RetrialBanner({ c }: { c: CaseFile }) {
 }
 
 /** A retrial with no record of the last trial: let the player paste the transcript to rebuild it. */
+type Ruling = PriorTrial["motionsHeard"][string] | "";
+const RULINGS: Array<[Ruling, string]> = [["", "not argued"], ["granted", "granted"], ["granted-in-part", "granted in part"], ["denied", "denied"]];
+
 function AttachTranscript({ c, s, onAttached }: { c: CaseFile; s: TrialState; onAttached: (s: TrialState) => void }) {
   const [text, setText] = useState("");
+  const [rulings, setRulings] = useState<Record<string, Ruling>>({});
   const r = s.retrial!;
   const attach = () => {
-    const prior = parsePriorTrial(c, text, { round: r.round - 1, acquitted: r.acquitted });
-    const next: TrialState = { ...s, retrial: { ...r, acquittedNames: r.acquittedNames ?? names(c, r.acquitted), prior: [...(r.prior ?? []), prior] } };
+    const motionsHeard: PriorTrial["motionsHeard"] = {};
+    for (const [name, v] of Object.entries(rulings)) if (v) motionsHeard[name] = v;
+    const prior = parsePriorTrial(c, text, { round: r.round - 1, acquitted: r.acquitted, motionsHeard });
+    const withRecord: TrialState = { ...s, retrial: { ...r, acquittedNames: r.acquittedNames ?? names(c, r.acquitted), prior: [...(r.prior ?? []), prior] } };
+    const next = applyPriorRulings(c, withRecord, prior); // law of the case: granted motions and exclusions carry into this round
     saveTrial(next);
     onAttached(next);
+    window.location.reload(); // the evidence and motion badges read the save on mount
   };
   return (
     <div className="mt-4 rounded-lg border border-wood-600 p-3 text-xs">
@@ -68,9 +76,45 @@ function AttachTranscript({ c, s, onAttached }: { c: CaseFile; s: TrialState; on
         This retrial was started before the sim kept the first trial&apos;s record. Paste the transcript from trial {r.round - 1} (and the verdict screen above it, if you have it) and it becomes the sworn record: the notes here, and what the court and witnesses are held to in round {r.round}.
       </p>
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} placeholder={"— PRETRIAL —\nDefense (You): …\nJudge …: …"} className="mt-2 w-full rounded border border-wood-600 bg-black/30 p-2 font-mono text-[11px]" />
+      <p className="mt-3 font-semibold text-brass">How did the judge rule on each motion in trial {r.round - 1}?</p>
+      <p className="text-ink">Granted rulings are law of the case: they carry into round {r.round} and their evidence stays excluded. Denied motions can be re-argued on new grounds.</p>
+      <ul className="mt-1 space-y-1">
+        {c.pretrialMotions.map((m) => (
+          <li key={m.id} className="flex flex-wrap items-center gap-2">
+            <span className="min-w-0 flex-1">{m.name}</span>
+            <select value={rulings[m.name] ?? ""} onChange={(e) => setRulings({ ...rulings, [m.name]: e.target.value as Ruling })} className="rounded border border-wood-600 bg-black/30 px-1 py-0.5 text-[11px]">
+              {RULINGS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+            </select>
+          </li>
+        ))}
+      </ul>
       <button onClick={attach} disabled={!text.trim()} className="brass-btn mt-2 px-3 py-1 text-xs disabled:opacity-50">Attach as trial {r.round - 1} record</button>
     </div>
   );
+}
+
+/** Badge for an evidence card: shows what the last trial did with it, and whether that ruling still binds. */
+export function EvidenceStatus({ c, evidenceId }: { c: CaseFile; evidenceId: string }) {
+  const v = useRetrialView(c);
+  const prior = v?.s.retrial?.prior?.at(-1);
+  if (!v || !prior) return null;
+  const round = prior.round;
+  if (v.s.excluded.includes(evidenceId) || prior.excluded.includes(evidenceId)) {
+    return <p className="mt-1 rounded bg-acquit/15 px-2 py-1 text-xs font-semibold text-acquit">Excluded in trial {round} · law of the case, stays out in round {v.s.retrial!.round}</p>;
+  }
+  if (prior.admitted.includes(evidenceId)) return <p className="mt-1 rounded bg-guilty/15 px-2 py-1 text-xs font-semibold text-guilty">Admitted in trial {round} · expect the State to offer it again</p>;
+  return null;
+}
+
+/** Badge for a pretrial motion: last time's ruling and what it means for this round. */
+export function MotionStatus({ c, motionName }: { c: CaseFile; motionName: string }) {
+  const v = useRetrialView(c);
+  const prior = v?.s.retrial?.prior?.at(-1);
+  if (!v || !prior) return null;
+  const r = prior.motionsHeard[motionName];
+  if (!r) return <p className="mt-1 text-xs text-ink">Not argued in trial {prior.round}. Still available.</p>;
+  if (r === "denied") return <p className="mt-1 text-xs font-semibold text-caution">Denied in trial {prior.round} · re-argue only with new grounds</p>;
+  return <p className="mt-1 text-xs font-semibold text-acquit">{r === "granted" ? "Granted" : "Granted in part"} in trial {prior.round} · the ruling stands in round {v.s.retrial!.round}</p>;
 }
 
 /** Badge for a charge card: greys out counts the defendant can no longer be tried on. */

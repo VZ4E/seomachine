@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCase } from "@/lib/cases";
 import { publicCase } from "@/lib/engine/witness";
-import { ChargeStatus, RetrialBanner } from "@/components/CaseFileStatus";
+import { ChargeStatus, EvidenceStatus, MotionStatus, RetrialBanner } from "@/components/CaseFileStatus";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +71,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
                 </div>
                 <p className="mt-1">{e.description}</p>
                 {e.admissibilityIssue && <p className="mt-1 text-xs text-caution">Admissibility: {e.admissibilityIssue}</p>}
+                <EvidenceStatus c={pub} evidenceId={e.id} />
               </li>
             ))}
           </ul>
@@ -80,7 +81,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
           <h2 className="mb-3 font-serif text-2xl">Pretrial motions</h2>
           <ul className="space-y-3 text-sm">
             {c.pretrialMotions.map((m) => (
-              <li key={m.id}><p className="font-semibold">{m.name}</p><p className="text-ink">{m.basis}</p></li>
+              <li key={m.id}><p className="font-semibold">{m.name}</p><p className="text-ink">{m.basis}</p><MotionStatus c={pub} motionName={m.name} /></li>
             ))}
           </ul>
           <h3 className="mt-5 font-serif text-xl">Bench</h3>

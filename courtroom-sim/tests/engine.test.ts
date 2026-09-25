@@ -3,7 +3,7 @@ import { detectObjection } from "@/lib/engine/objections";
 import { nextPhase, PHASES } from "@/lib/engine/phases";
 import { generateVenire, doubtLevel, seated } from "@/lib/engine/jurors";
 import { sanitizeTurn, type CourtTurn } from "@/lib/engine/schema";
-import { activeCase, initRetrial, initTrial, reducer, retriableCounts, priorTrialRecord, type TrialState } from "@/lib/engine/state";
+import { activeCase, applyPriorRulings, initRetrial, initTrial, reducer, retriableCounts, priorTrialRecord, type TrialState } from "@/lib/engine/state";
 import { priorTrialNotes, turnPrompt } from "@/lib/engine/prompts";
 import { parsePriorTrial } from "@/lib/engine/transcriptImport";
 import { grade, outcomeOf, rankFor, tierUnlocked } from "@/lib/engine/scoring";
@@ -268,5 +268,34 @@ describe("transcript import", () => {
     expect(priorTrialNotes(c, old)).toBe("");
     expect(turnPrompt(activeCase(c, old), old, { kind: "proceed" })).toContain("ACQUITTED of: gang-enh");
     expect(activeCase(c, old).charges.map((x) => x.id)).toEqual(["murder"]);
+  });
+});
+
+describe("law of the case on retrial", () => {
+  it("carries granted motions and exclusions into the retrial, leaves denied motions open", () => {
+    let s = initTrial(c, 1);
+    s = reducer(s, { type: "advance" }); // pretrial
+    s = reducer(s, { type: "turn", turn: blank({ ruling: { on: "Motion in Limine to Exclude Lyrics", result: "granted", reason: "403", favorsDefense: true }, evidenceExcluded: ["lyrics"] }) });
+    s = reducer(s, { type: "turn", turn: blank({ ruling: { on: "Motion to Suppress the Gun", result: "denied", reason: "no standing", favorsDefense: false } }) });
+    while (s.phase !== "deliberation") s = reducer(s, { type: "advance" });
+    s = reducer(s, { type: "deliberated", result: { transcript: [], foreperson: "", keyFactor: "", critique: [], verdicts: [
+      { chargeId: "murder", result: "hung", lesser: null, votesNotGuilty: 6 }, { chargeId: "gang-enh", result: "not-guilty", lesser: null, votesNotGuilty: 12 },
+    ] } });
+    const r = initRetrial(c, s, 2);
+    expect(r.excluded).toEqual(["lyrics"]);
+    expect(r.motionsHeard).toEqual({ "Motion in Limine to Exclude Lyrics": "granted" });
+    expect(r.retrial!.prior[0].motionsHeard["Motion to Suppress the Gun"]).toBe("denied");
+  });
+  it("applies rulings chosen at attach time, resolving evidence through motion targets", () => {
+    const old = { ...initTrial(c, 1), retrial: { round: 2, acquitted: ["gang-enh"], acquittedNames: ["Gang Enhancement"], prior: [] } };
+    const prior = parsePriorTrial(c, "Clerk: All rise.", { acquitted: ["gang-enh"], motionsHeard: { "Motion in Limine to Exclude Lyrics": "granted" } });
+    expect(prior.excluded).toEqual(["lyrics"]);
+    const next = applyPriorRulings(c, old, prior);
+    expect(next.excluded).toEqual(["lyrics"]);
+    expect(next.motionsHeard["Motion in Limine to Exclude Lyrics"]).toBe("granted");
+    // Ruling lines in the pasted text work too.
+    const p2 = parsePriorTrial(c, "Motion in Limine to Exclude Lyrics: denied\nClerk: All rise.");
+    expect(p2.motionsHeard).toEqual({ "Motion in Limine to Exclude Lyrics": "denied" });
+    expect(p2.excluded).toEqual([]);
   });
 });

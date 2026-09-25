@@ -326,11 +326,15 @@ export default function Trial({ c }: { c: CaseFile }) {
               <div className="flex flex-wrap gap-2">
                 {c.pretrialMotions.map((m) => {
                   const heard = s.motionsHeard[m.name];
+                  const lastTime = s.retrial?.prior?.at(-1)?.motionsHeard[m.name];
+                  const carried = !!lastTime && lastTime !== "denied"; // law of the case: granted rulings stand
                   return (
                     <button key={m.id} disabled={busy || !!heard} onClick={() => setMotionId(motionId === m.id ? null : m.id)}
-                      title={m.basis}
+                      title={carried ? `${lastTime} in trial ${s.retrial!.prior.at(-1)!.round}. The ruling stands.` : lastTime === "denied" ? `Denied in trial ${s.retrial!.prior.at(-1)!.round}. Re-argue only with new grounds.` : m.basis}
                       className={`rounded-md border px-3 py-1.5 text-left text-xs ${motionId === m.id ? "border-brass bg-brass/15" : "border-wood-600"} disabled:opacity-60`}>
-                      {m.name}{heard && <span className={`ml-1 font-semibold ${heard === "denied" ? "text-guilty" : "text-acquit"}`}>· {heard}</span>}
+                      {m.name}
+                      {heard && <span className={`ml-1 font-semibold ${heard === "denied" ? "text-guilty" : "text-acquit"}`}>· {heard}{carried ? " (trial " + s.retrial!.prior.at(-1)!.round + ")" : ""}</span>}
+                      {!heard && lastTime === "denied" && <span className="ml-1 text-caution">· denied last time</span>}
                     </button>
                   );
                 })}

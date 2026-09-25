@@ -8,6 +8,7 @@ import type { PriorTrial, TrialState } from "./state";
 const PHASE_MARK = /^— (.+) —$/;
 const VERDICT_LINE = /^(.+?):\s*(NOT GUILTY|GUILTY(?: \(lesser\))?|HUNG JURY)\s*(?:—\s*(.+?))?\s*\((\d+)\s*[–-]\s*(\d+)\s*NG\)\s*$/i;
 const FOREPERSON = /^Foreperson (.+?) · Deciding factor: (.+)$/;
+const RULING_LINE = /^(Motion .+?):\s*(granted-in-part|granted|denied)\s*$/i;
 
 export function speakerFor(c: CaseFile, name: string): TrialState["transcript"][number]["speaker"] {
   if (/^defense/i.test(name)) return "defense";
@@ -24,8 +25,13 @@ export function speakerFor(c: CaseFile, name: string): TrialState["transcript"][
 }
 
 /** Parse pasted text into a PriorTrial. Lines are "Name: text"; "— PHASE —" markers set the phase. */
-export function parsePriorTrial(c: CaseFile, text: string, opts: { round?: number; acquitted?: string[] } = {}): PriorTrial {
+export function parsePriorTrial(
+  c: CaseFile,
+  text: string,
+  opts: { round?: number; acquitted?: string[]; motionsHeard?: PriorTrial["motionsHeard"] } = {},
+): PriorTrial {
   const acquitted = new Set(opts.acquitted ?? []);
+  const motionsHeard: PriorTrial["motionsHeard"] = { ...(opts.motionsHeard ?? {}) };
   const transcript: PriorTrial["transcript"] = [];
   const verdicts = new Map<string, PriorTrial["verdicts"][number]>();
   let phase: PhaseId = "arraignment";
@@ -39,6 +45,12 @@ export function parsePriorTrial(c: CaseFile, text: string, opts: { round?: numbe
     if (mark) { phase = mark[1].toLowerCase().replace(/\s+/g, "_") as PhaseId; continue; }
     const fp = FOREPERSON.exec(l);
     if (fp) { foreperson = fp[1]; keyFactor = fp[2]; continue; }
+    const rl = RULING_LINE.exec(l);
+    if (rl) {
+      const m = c.pretrialMotions.find((x) => x.name.toLowerCase() === rl[1].trim().toLowerCase());
+      if (m) motionsHeard[m.name] = rl[2].toLowerCase() as PriorTrial["motionsHeard"][string];
+      continue;
+    }
     const v = VERDICT_LINE.exec(l);
     if (v) {
       const ch = c.charges.find((x) => x.name.toLowerCase() === v[1].trim().toLowerCase());
@@ -65,10 +77,10 @@ export function parsePriorTrial(c: CaseFile, text: string, opts: { round?: numbe
     keyFactor: keyFactor || (foreperson ? `Foreperson ${foreperson}` : ""),
     critique: [],
     bail: null,
-    motionsHeard: {},
+    motionsHeard,
     rulings: [],
     admitted: [],
-    excluded: [],
+    excluded: c.pretrialMotions.filter((m) => motionsHeard[m.name] === "granted").flatMap((m) => m.targets ?? []),
     revealed: [],
     transcript,
   };
