@@ -3,7 +3,8 @@ import { detectObjection } from "@/lib/engine/objections";
 import { nextPhase, PHASES } from "@/lib/engine/phases";
 import { generateVenire, doubtLevel, seated } from "@/lib/engine/jurors";
 import { sanitizeTurn, type CourtTurn } from "@/lib/engine/schema";
-import { activeCase, initRetrial, initTrial, reducer, retriableCounts, type TrialState } from "@/lib/engine/state";
+import { activeCase, initRetrial, initTrial, reducer, retriableCounts, priorTrialRecord, type TrialState } from "@/lib/engine/state";
+import { priorTrialNotes, turnPrompt } from "@/lib/engine/prompts";
 import { grade, outcomeOf, rankFor, tierUnlocked } from "@/lib/engine/scoring";
 import { mockDeliberation, mockTurn } from "@/lib/ai/mock";
 import { publicCase } from "@/lib/engine/witness";
@@ -156,12 +157,14 @@ describe("retrial after a hung jury", () => {
     const r = initRetrial(c, prev, 2);
     expect(r.phase).toBe("arraignment");
     expect(r.transcript).toEqual([]);
-    expect(r.retrial).toEqual({ round: 2, acquitted: ["gang-enh"] });
+    expect(r.retrial).toMatchObject({ round: 2, acquitted: ["gang-enh"] });
+    expect(r.retrial!.prior).toHaveLength(1);
     expect(activeCase(c, r).charges.map((x) => x.id)).toEqual(["murder"]);
     expect(activeCase(c, prev)).toBe(c);
     // A second hung jury on murder keeps the earlier acquittal and bumps the round.
     const again = initRetrial(c, { ...r, deliberation: { ...verdict("hung", "not-guilty"), verdicts: [verdict("hung", "hung").verdicts[0]] } }, 3);
-    expect(again.retrial).toEqual({ round: 3, acquitted: ["gang-enh"] });
+    expect(again.retrial).toMatchObject({ round: 3, acquitted: ["gang-enh"] });
+    expect(again.retrial!.prior.map((p) => p.round)).toEqual([1, 2]);
   });
   it("mock court and jury only see the live count", () => {
     const prev = { ...initTrial(c, 1), deliberation: verdict("hung", "not-guilty") };
@@ -172,5 +175,57 @@ describe("retrial after a hung jury", () => {
     const arraign = mockTurn(live, r, { kind: "proceed" }).lines.map((l) => l.text).join(" ");
     expect(arraign).toContain("Murder");
     expect(arraign).not.toContain("Gang Enhancement");
+  });
+});
+
+describe("retrial carries the first trial's record", () => {
+  const played = () => {
+    let s = initTrial(c, 1);
+    s = reducer(s, { type: "advance" }); // pretrial marker
+    s = reducer(s, { type: "turn", turn: blank({ ruling: { on: "Motion to suppress lyrics", result: "granted", reason: "403", favorsDefense: true }, evidenceExcluded: ["lyrics"] }) });
+    while (s.phase !== "prosecution_case") s = reducer(s, { type: "advance" });
+    s = reducer(s, { type: "callWitness", witnessId: "eyewitness", mode: "cross" });
+    s = reducer(s, { type: "say", speaker: "defense", name: "Defense (You)", text: "Were you wearing your glasses?" });
+    s = reducer(s, { type: "turn", turn: blank({
+      lines: [{ speaker: "witness", name: "Ida Witness", text: "No. I had left them at home." }],
+      factsRevealed: [{ witnessId: "eyewitness", fact: "She was wearing no glasses and it was dark under a broken streetlight" }],
+    }) });
+    while (s.phase !== "deliberation") s = reducer(s, { type: "advance" });
+    return reducer(s, { type: "deliberated", result: { transcript: [], foreperson: "F", keyFactor: "The eyewitness", critique: ["Good cross"], verdicts: [
+      { chargeId: "murder", result: "hung", lesser: null, votesNotGuilty: 7 },
+      { chargeId: "gang-enh", result: "not-guilty", lesser: null, votesNotGuilty: 12 },
+    ] } });
+  };
+  it("snapshots rulings, exposed facts, exclusions and phased testimony", () => {
+    const p = priorTrialRecord(played());
+    expect(p.round).toBe(1);
+    expect(p.excluded).toEqual(["lyrics"]);
+    expect(p.revealed[0].fact).toMatch(/no glasses/);
+    expect(p.keyFactor).toBe("The eyewitness");
+    const ida = p.transcript.find((l) => l.name === "Ida Witness")!;
+    expect(ida.phase).toBe("prosecution_case");
+    expect(p.transcript.some((l) => l.speaker === "system")).toBe(false);
+  });
+  it("feeds the record to the model on every retrial turn, but never on a first trial", () => {
+    const prev = played();
+    const r = initRetrial(c, prev, 2);
+    const notes = priorTrialNotes(c, r);
+    expect(notes).toContain("SWORN TESTIMONY OF IDA WITNESS");
+    expect(notes).toContain("Q (Defense (You)): Were you wearing your glasses?");
+    expect(notes).toContain("no glasses");
+    expect(notes).toContain("Murder hung (7-5 NG)");
+    const prompt = turnPrompt(activeCase(c, r), r, { kind: "proceed" });
+    expect(prompt).toContain("RETRIAL (round 2)");
+    expect(prompt).toContain("ACQUITTED of: Gang Enhancement");
+    expect(prompt).toContain("PRIOR TRIAL RECORD");
+    expect(turnPrompt(c, prev, { kind: "proceed" })).not.toContain("RETRIAL (round");
+    expect(priorTrialNotes(c, prev)).toBe("");
+  });
+  it("keeps the prompt digest within budget on a long record", () => {
+    const prev = played();
+    const long = { ...prev, transcript: [...prev.transcript, ...Array.from({ length: 400 }, (_, i) => ({ id: 1000 + i, speaker: "witness" as const, name: "Ida Witness", text: `Answer number ${i} `.repeat(20) }))] };
+    const r = initRetrial(c, long, 2);
+    expect(priorTrialNotes(c, r, 4000).length).toBeLessThan(6000);
+    expect(priorTrialNotes(c, r, 4000)).toContain("further testimony omitted");
   });
 });

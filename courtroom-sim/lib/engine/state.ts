@@ -13,9 +13,27 @@ export interface TranscriptLine extends Omit<CourtLineT, "speaker"> {
 
 export interface ScoreEvent { label: string; points: number; phase: PhaseId }
 
+/** What survives a mistrial: the sworn record. Everything the lawyers can hold witnesses to next time. */
+export interface PriorTrial {
+  round: number;
+  verdicts: Deliberation["verdicts"];
+  keyFactor: string;
+  critique: string[];
+  bail: TrialState["bail"];
+  motionsHeard: TrialState["motionsHeard"];
+  rulings: Array<RulingT & { phase: PhaseId }>;
+  admitted: string[];
+  excluded: string[];
+  revealed: Array<{ witnessId: string; fact: string }>;
+  /** Non-system transcript lines, in order: the prior sworn testimony and argument. */
+  transcript: Array<{ speaker: TranscriptLine["speaker"]; name: string; text: string; phase: PhaseId }>;
+}
+
 export interface RetrialInfo {
   round: number; // 2 for the first retrial
   acquitted: string[]; // charge ids resolved not-guilty in earlier rounds (jeopardy attached; cannot be retried)
+  acquittedNames: string[]; // display names for the ids above (the model only sees a case file with those charges removed)
+  prior: PriorTrial[]; // one record per earlier round, oldest first
 }
 
 export interface TrialState {
@@ -95,12 +113,44 @@ export function retriableCounts(s: TrialState): string[] | null {
   return hung.length && !convicted ? hung : null;
 }
 
-/** Fresh trial (new venire, clean record) on only the counts the last jury hung on. */
+const PHASE_MARK = /^— (.+) —$/;
+
+/** Snapshot the record of a finished trial so a retrial can use it. */
+export function priorTrialRecord(prev: TrialState): PriorTrial {
+  // Transcript lines carry no phase; the system markers ("— VOIR DIRE —") tell us where we are.
+  let phase: PhaseId = "arraignment";
+  const transcript: PriorTrial["transcript"] = [];
+  for (const l of prev.transcript) {
+    if (l.speaker === "system") {
+      const m = PHASE_MARK.exec(l.text);
+      if (m) phase = m[1].toLowerCase().replace(/\s+/g, "_") as PhaseId;
+      continue;
+    }
+    transcript.push({ speaker: l.speaker, name: l.name, text: l.text, phase });
+  }
+  const d = prev.deliberation;
+  return {
+    round: prev.retrial?.round ?? 1,
+    verdicts: d?.verdicts ?? [],
+    keyFactor: d?.keyFactor ?? "",
+    critique: d?.critique ?? [],
+    bail: prev.bail,
+    motionsHeard: prev.motionsHeard,
+    rulings: prev.rulings,
+    admitted: prev.admitted,
+    excluded: prev.excluded,
+    revealed: prev.revealed,
+    transcript,
+  };
+}
+
+/** Fresh trial (new venire, clean record) on only the counts the last jury hung on. The first trial's record comes along. */
 export function initRetrial(c: CaseFile, prev: TrialState, seed?: number): TrialState {
   const hung = new Set(retriableCounts(prev) ?? []);
   const acquitted = [...new Set([...acquittedCounts(prev), ...c.charges.map((ch) => ch.id).filter((id) => !hung.has(id))])];
   const fresh = seed === undefined ? initTrial(c) : initTrial(c, seed);
-  return { ...fresh, retrial: { round: (prev.retrial?.round ?? 1) + 1, acquitted } };
+  const acquittedNames = acquitted.map((id) => c.charges.find((ch) => ch.id === id)?.name ?? id);
+  return { ...fresh, retrial: { round: (prev.retrial?.round ?? 1) + 1, acquitted, acquittedNames, prior: [...(prev.retrial?.prior ?? []), priorTrialRecord(prev)] } };
 }
 
 export type Action =

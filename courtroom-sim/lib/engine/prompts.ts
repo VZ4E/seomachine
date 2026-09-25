@@ -40,9 +40,55 @@ CASE FILE (confidential to the engine):
 ${JSON.stringify(playable)}`;
 }
 
-function retrialNote(s: TrialState): string {
+const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+
+/**
+ * The sworn record of the last trial, condensed for the model. Witnesses are bound by it: a witness who
+ * strays from prior testimony hands the defense an impeachment, and the engine should play it that way.
+ */
+export function priorTrialNotes(c: CaseFile, s: TrialState, budget = 9000): string {
+  const prior = s.retrial?.prior?.at(-1);
+  if (!prior) return "";
+  const evName = (id: string) => c.evidence.find((e) => e.id === id)?.name ?? id;
+  const chName = (id: string) => c.charges.find((x) => x.id === id)?.name ?? id;
+  const out: string[] = [];
+  out.push(`Verdicts: ${prior.verdicts.map((v) => `${chName(v.chargeId)} ${v.result} (${v.votesNotGuilty}-${12 - v.votesNotGuilty} NG)`).join("; ")}. Jury's deciding factor: ${prior.keyFactor}`);
+  if (prior.bail) out.push(`Bail last time: client ${prior.bail}.`);
+  const motions = Object.entries(prior.motionsHeard).map(([m, r]) => `${m}: ${r}`);
+  if (motions.length) out.push(`Pretrial motions last time (law of the case; the judge will normally adhere unless new grounds are shown): ${motions.join("; ")}`);
+  if (prior.excluded.length) out.push(`Evidence excluded last time: ${prior.excluded.map(evName).join("; ")}`);
+  if (prior.revealed.length) out.push(`Facts the defense exposed last time (now on the record; witnesses cannot credibly deny them): ${prior.revealed.map((r) => r.fact).join("; ")}`);
+  const rulings = prior.rulings.filter((r) => r.result === "sustained" || r.result === "overruled").slice(-12);
+  if (rulings.length) out.push(`Notable objection rulings last time: ${rulings.map((r) => `${r.on} ${r.result}`).join("; ")}`);
+
+  // Sworn testimony, grouped by witness: each answer with the question that drew it.
+  const witnesses = [...c.witnesses.map((w) => ({ name: w.name })), { name: c.defendant.name }];
+  const perWitness = Math.max(600, Math.floor((budget - out.join("\n").length) / Math.max(1, witnesses.length)));
+  const t = prior.transcript;
+  for (const w of witnesses) {
+    const pairs: string[] = [];
+    t.forEach((l, i) => {
+      if (l.name !== w.name || !["witness", "defendant"].includes(l.speaker)) return;
+      const q = t[i - 1];
+      const qs = q && q.name !== w.name ? `Q (${q.name}): ${clip(q.text, 160)} ` : "";
+      pairs.push(`${qs}A: ${clip(l.text, 220)}`);
+    });
+    if (!pairs.length) continue;
+    let block = "";
+    for (const p of pairs) {
+      if (block.length + p.length > perWitness) { block += "\n  [… further testimony omitted]"; break; }
+      block += "\n  " + p;
+    }
+    out.push(`SWORN TESTIMONY OF ${w.name.toUpperCase()} (trial ${prior.round}):${block}`);
+  }
+  return out.join("\n");
+}
+
+function retrialNote(c: CaseFile, s: TrialState): string {
   if (!s.retrial) return "";
-  return `RETRIAL (round ${s.retrial.round}): the first jury hung on the remaining count(s) and a mistrial was declared. The defendant was ACQUITTED of: ${s.retrial.acquitted.join(", ") || "none"}. Those counts are final (double jeopardy) and must not be charged, argued, or mentioned as pending. Only the charges in the case file are before this court. This is a new jury with no memory of the first trial, but the lawyers know the prior testimony and may impeach witnesses with it.
+  return `RETRIAL (round ${s.retrial.round}): the last jury hung on the remaining count(s) and a mistrial was declared. The defendant was ACQUITTED of: ${(s.retrial.acquittedNames ?? s.retrial.acquitted).join(", ") || "none"}. Those counts are final (double jeopardy) and must not be charged, argued, or mentioned as pending. Only the charges in the case file are before this court. This is a new jury with no memory of the first trial, but both lawyers have the full record. Witnesses testified under oath last time and are bound by it: they should testify consistently with their prior sworn testimony, and if they deviate or the defense confronts them with it, treat that as impeachment with a prior statement (report it in factsRevealed). The prosecutor has adjusted to the defense's first-trial strategy and will try to shore up the weaknesses the defense exposed.
+PRIOR TRIAL RECORD:
+${priorTrialNotes(c, s)}
 `;
 }
 
@@ -93,7 +139,7 @@ export function turnPrompt(c: CaseFile, s: TrialState, input: PlayerInput): stri
       break;
   }
 
-  return `${retrialNote(s)}PHASE: ${p.label}. ${p.direction}
+  return `${retrialNote(c, s)}PHASE: ${p.label}. ${p.direction}
 ${witness ? `CURRENT WITNESS: ${witness.name} (${witness.role}, ${witness.side} witness, id ${witness.id}). Examination: ${s.examMode}.` : ""}
 JURY ${JURY_ABSENT.includes(s.phase) ? "IS NOT PRESENT (jurorReactions must be empty)" : "IS PRESENT"}.
 ${s.phase === "voir_dire" ? "PANEL:" : "SEATED JURY:"}
@@ -115,7 +161,7 @@ export function deliberationPrompt(c: CaseFile, s: TrialState): string {
     .map((j, i) => `Seat ${i + 1} ${j.name} (${j.occupation}; bias: ${j.bias}) lean=${j.lean}`)
     .join("\n");
   const transcript = s.transcript.map((l) => `${l.name}: ${l.text}`).join("\n").slice(-24000);
-  return `${retrialNote(s)}The jury retires to deliberate in ${c.title}. Charges: ${c.charges
+  return `${retrialNote(c, s)}The jury retires to deliberate in ${c.title}. Charges: ${c.charges
     .map((ch) => `${ch.id}: ${ch.name} — elements: ${ch.elements.join("; ")}${ch.lesserIncluded?.length ? ` — lesser included: ${ch.lesserIncluded.join(", ")}` : ""}`)
     .join(" | ")}.
 Counts already dismissed by the judge (verdict must be not-guilty): ${s.dismissedCounts.join(", ") || "none"}.

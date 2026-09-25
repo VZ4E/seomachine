@@ -16,6 +16,7 @@ import JuryBox from "./JuryBox";
 import Lectern from "./Lectern";
 import ObjectionBar from "./ObjectionBar";
 import PhaseTracker from "./PhaseTracker";
+import PriorTrialNotes from "./PriorTrialNotes";
 import Transcript from "./Transcript";
 import Verdict from "./Verdict";
 import VoirDire from "./VoirDire";
@@ -372,6 +373,7 @@ export default function Trial({ c }: { c: CaseFile }) {
           {!lecternOpen && objectionsOpen && (
             <Lectern onSubmit={onSpeak} onObjectionHeard={silence} disabled={busy} placeholder="Say “Objection, …” or address the court" />
           )}
+          <PriorTrialNotes c={c} s={s} />
           <EvidencePanel c={c} admitted={s.admitted} excluded={s.excluded} />
           <div className="panel p-3 text-xs">
             <h3 className="mb-1 font-serif text-lg">Running score</h3>
