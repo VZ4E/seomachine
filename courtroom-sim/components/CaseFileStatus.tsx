@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import type { CaseFile } from "@/lib/engine/caseTypes";
 import { loadTrial, saveTrial } from "@/lib/career";
-import { acquittedCounts, applyPriorRulings, initRetrial, retriableCounts, type PriorTrial, type TrialState } from "@/lib/engine/state";
+import { acquittedCounts, applyPriorRulings, initRetrial, initTrial, retriableCounts, type PriorTrial, type TrialState } from "@/lib/engine/state";
 import { parsePriorTrial } from "@/lib/engine/transcriptImport";
 import PriorTrialNotes from "./PriorTrialNotes";
 
@@ -13,21 +13,24 @@ import PriorTrialNotes from "./PriorTrialNotes";
  */
 function useRetrialView(c: CaseFile) {
   const [view, setView] = useState<{ s: TrialState; started: boolean } | null>(null);
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     const saved = loadTrial(c.id);
+    setLoaded(true);
     if (!saved) return;
     if (saved.retrial) setView({ s: saved, started: saved.phase !== "verdict" || !saved.deliberation });
     else if (saved.phase === "verdict" && retriableCounts(saved)) setView({ s: initRetrial(c, saved, 0), started: false });
   }, [c]);
-  return view;
+  return { view, loaded };
 }
 
 const names = (c: CaseFile, ids: string[]) => ids.map((id) => c.charges.find((x) => x.id === id)?.name ?? id);
 
 export function RetrialBanner({ c }: { c: CaseFile }) {
-  const v = useRetrialView(c);
+  const { view: v, loaded } = useRetrialView(c);
   const [s, setS] = useState<TrialState | null>(null);
   useEffect(() => { setS(v?.s ?? null); }, [v]);
+  if (loaded && !v) return <StartRetrialFromTranscript c={c} />;
   if (!v || !s?.retrial) return null;
   const r = s.retrial;
   // Saves from the first cut of the retrial feature lack acquittedNames and prior.
@@ -93,9 +96,92 @@ function AttachTranscript({ c, s, onAttached }: { c: CaseFile; s: TrialState; on
   );
 }
 
+type VerdictPick = "hung" | "not-guilty" | "guilty";
+
+/**
+ * No save says this case hung, but the player says it did (a lost save, another browser, the old retry button).
+ * Rebuild round 1 from the transcript and the verdicts they enter, then start round 2 from it.
+ */
+function StartRetrialFromTranscript({ c }: { c: CaseFile }) {
+  const [text, setText] = useState("");
+  const [verdicts, setVerdicts] = useState<Record<string, VerdictPick>>({});
+  const [rulings, setRulings] = useState<Record<string, Ruling>>({});
+  const [error, setError] = useState<string | null>(null);
+  const pick = (id: string): VerdictPick => verdicts[id] ?? "not-guilty";
+  const hung = c.charges.filter((ch) => pick(ch.id) === "hung");
+  const convicted = c.charges.some((ch) => pick(ch.id) === "guilty");
+
+  const start = () => {
+    if (!hung.length || convicted) return;
+    if (loadTrial(c.id) && !confirm("This replaces the trial currently saved for this case. Continue?")) return;
+    const motionsHeard: PriorTrial["motionsHeard"] = {};
+    for (const [name, v] of Object.entries(rulings)) if (v) motionsHeard[name] = v;
+    const acquitted = c.charges.filter((ch) => pick(ch.id) === "not-guilty").map((ch) => ch.id);
+    const parsed = parsePriorTrial(c, text, { round: 1, acquitted, motionsHeard });
+    // Verdict lines in the paste win; otherwise the dropdowns decide.
+    const verdictList = c.charges.map((ch) => {
+      const fromText = parsed.verdicts.find((v) => v.chargeId === ch.id);
+      const chosen = pick(ch.id);
+      return fromText && text.includes(ch.name) && /NG\)/.test(text) ? fromText : { chargeId: ch.id, result: chosen, lesser: null, votesNotGuilty: chosen === "hung" ? 6 : chosen === "not-guilty" ? 12 : 0 };
+    });
+    const first: TrialState = { ...initTrial(c), phase: "verdict", deliberation: { transcript: [], foreperson: "", keyFactor: parsed.keyFactor, critique: [], verdicts: verdictList } };
+    if (!retriableCounts(first)) { setError("A retrial needs at least one hung count and no convictions."); return; }
+    const round2 = initRetrial(c, first);
+    const record: PriorTrial = { ...parsed, verdicts: verdictList };
+    const next = applyPriorRulings(c, { ...round2, retrial: { ...round2.retrial!, prior: [record] } }, record);
+    saveTrial(next);
+    window.location.reload();
+  };
+
+  return (
+    <details className="panel p-5 lg:col-span-3">
+      <summary className="cursor-pointer font-serif text-xl text-brass">Had a mistrial in this case? Start the retrial from your transcript</summary>
+      <p className="mt-2 text-xs text-ink">
+        If the jury hung and your save is gone, rebuild round 1 here. Paste the transcript (with the verdict screen above it if you have it), set how each count ended and how the judge ruled on each motion, and round 2 begins with the acquittals final, granted rulings carried over, and every sworn answer on record.
+      </p>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} placeholder={"— PRETRIAL —\nDefense (You): …\nJudge …: …"} className="mt-2 w-full rounded border border-wood-600 bg-black/30 p-2 font-mono text-[11px]" />
+      <div className="mt-3 grid gap-4 text-xs sm:grid-cols-2">
+        <div>
+          <p className="font-semibold text-brass">How did each count end?</p>
+          <ul className="mt-1 space-y-1">
+            {c.charges.map((ch) => (
+              <li key={ch.id} className="flex items-center gap-2">
+                <span className="min-w-0 flex-1">{ch.name}</span>
+                <select value={pick(ch.id)} onChange={(e) => setVerdicts({ ...verdicts, [ch.id]: e.target.value as VerdictPick })} className="rounded border border-wood-600 bg-black/30 px-1 py-0.5 text-[11px]">
+                  <option value="not-guilty">not guilty</option>
+                  <option value="hung">hung jury</option>
+                  <option value="guilty">guilty</option>
+                </select>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <p className="font-semibold text-brass">How did the judge rule on each motion?</p>
+          <ul className="mt-1 space-y-1">
+            {c.pretrialMotions.map((m) => (
+              <li key={m.id} className="flex items-center gap-2">
+                <span className="min-w-0 flex-1">{m.name}</span>
+                <select value={rulings[m.name] ?? ""} onChange={(e) => setRulings({ ...rulings, [m.name]: e.target.value as Ruling })} className="rounded border border-wood-600 bg-black/30 px-1 py-0.5 text-[11px]">
+                  {RULINGS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+                </select>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      {error && <p className="mt-2 text-xs text-guilty">{error}</p>}
+      {convicted && <p className="mt-2 text-xs text-guilty">A conviction on any count ends the case. Only hung counts can be retried.</p>}
+      <button onClick={start} disabled={!hung.length || convicted} className="brass-btn mt-3 px-3 py-1 text-xs disabled:opacity-50">
+        Start round 2 on {hung.length ? hung.map((h) => h.name).join(" and ") : "the hung counts"}
+      </button>
+    </details>
+  );
+}
+
 /** Badge for an evidence card: shows what the last trial did with it, and whether that ruling still binds. */
 export function EvidenceStatus({ c, evidenceId }: { c: CaseFile; evidenceId: string }) {
-  const v = useRetrialView(c);
+  const { view: v } = useRetrialView(c);
   const prior = v?.s.retrial?.prior?.at(-1);
   if (!v || !prior) return null;
   const round = prior.round;
@@ -108,7 +194,7 @@ export function EvidenceStatus({ c, evidenceId }: { c: CaseFile; evidenceId: str
 
 /** Badge for a pretrial motion: last time's ruling and what it means for this round. */
 export function MotionStatus({ c, motionName }: { c: CaseFile; motionName: string }) {
-  const v = useRetrialView(c);
+  const { view: v } = useRetrialView(c);
   const prior = v?.s.retrial?.prior?.at(-1);
   if (!v || !prior) return null;
   const r = prior.motionsHeard[motionName];
@@ -119,7 +205,7 @@ export function MotionStatus({ c, motionName }: { c: CaseFile; motionName: strin
 
 /** Badge for a charge card: greys out counts the defendant can no longer be tried on. */
 export function ChargeStatus({ c, chargeId }: { c: CaseFile; chargeId: string }) {
-  const v = useRetrialView(c);
+  const { view: v } = useRetrialView(c);
   if (!v) return null;
   const gone = acquittedCounts(v.s).includes(chargeId);
   const prior = v.s.retrial?.prior?.at(-1);
