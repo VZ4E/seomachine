@@ -14,6 +14,7 @@ export default function Verdict({ c, s, onRestart, onRetrial }: { c: CaseFile; s
   const prior = acquittedCounts(s);
   const hung = retriableCounts(s);
   const chargeName = (id: string) => c.charges.find((x) => x.id === id)?.name ?? id;
+  const finalCount = prior.length + d.verdicts.length - (hung?.length ?? 0); // counts the State can never bring again
   const pts = trialPoints(s, outcome);
   const g = grade(pts, outcome);
   const top = [...s.score].sort((a, b) => Math.abs(b.points) - Math.abs(a.points)).slice(0, 8);
@@ -43,7 +44,7 @@ export default function Verdict({ c, s, onRestart, onRetrial }: { c: CaseFile; s
         <p className="mt-4 text-sm text-ink">Foreperson {d.foreperson} · Deciding factor: {d.keyFactor}</p>
         {hung && (
           <p className="mt-3 text-sm text-caution">
-            The State may retry {hung.map(chargeName).join(" and ")}. The {hung.length === 1 ? "acquittal" : "acquittals"} on the other {prior.length + d.verdicts.length - hung.length === 1 ? "count stands" : "counts stand"}: jeopardy attached and the State can never bring {prior.length + d.verdicts.length - hung.length === 1 ? "it" : "them"} again.
+            The State may retry {hung.map(chargeName).join(" and ")}. The {finalCount === 1 ? "acquittal on the other count stands" : "acquittals on the other counts stand"}: jeopardy attached and the State can never bring {finalCount === 1 ? "it" : "them"} again.
           </p>
         )}
         <div className="mt-5 inline-flex items-center gap-6 rounded-lg border border-brass/40 px-6 py-3">
