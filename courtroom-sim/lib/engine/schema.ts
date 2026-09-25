@@ -125,12 +125,14 @@ export function coerceDeliberation(raw: unknown): unknown {
   const r = unwrap(raw, "verdicts");
   return {
     transcript: arr(r.transcript).filter(isObj).map((l) => ({ seat: num(l.seat), name: str(l.name), text: str(l.text) })),
-    verdicts: arr(r.verdicts).filter(isObj).map((v) => ({
-      chargeId: str(v.chargeId),
-      result: pick(v.result, VERDICTS, { "not guilty": "not-guilty", notguilty: "not-guilty", acquitted: "not-guilty", "hung-jury": "hung", mistrial: "hung", lesser: "guilty-lesser" }, "hung"),
-      lesser: v.lesser == null || v.lesser === "" ? null : str(v.lesser),
-      votesNotGuilty: Math.max(0, Math.min(12, num(v.votesNotGuilty))),
-    })),
+    verdicts: arr(r.verdicts).filter(isObj).map((v) => {
+      const result = pick(v.result, VERDICTS, { "not guilty": "not-guilty", notguilty: "not-guilty", acquitted: "not-guilty", "hung-jury": "hung", mistrial: "hung", lesser: "guilty-lesser" }, "hung");
+      const polled = Math.max(0, Math.min(12, num(v.votesNotGuilty)));
+      // A verdict is unanimous by definition; only a hung count has a split poll. Models sometimes
+      // report the first ballot next to the final verdict, which would put an 8-4 "guilty" on the record.
+      const votesNotGuilty = result === "hung" ? polled : result === "not-guilty" ? 12 : 0;
+      return { chargeId: str(v.chargeId), result, lesser: v.lesser == null || v.lesser === "" ? null : str(v.lesser), votesNotGuilty };
+    }),
     foreperson: str(r.foreperson) || "Foreperson",
     keyFactor: str(r.keyFactor),
     critique: arr(r.critique).map(str).filter(Boolean),

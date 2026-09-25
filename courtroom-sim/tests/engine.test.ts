@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { detectObjection } from "@/lib/engine/objections";
 import { nextPhase, PHASES } from "@/lib/engine/phases";
 import { generateVenire, doubtLevel, seated } from "@/lib/engine/jurors";
-import { sanitizeTurn, type CourtTurn } from "@/lib/engine/schema";
+import { coerceDeliberation, sanitizeTurn, type CourtTurn } from "@/lib/engine/schema";
 import { activeCase, applyPriorRulings, initRetrial, initTrial, reducer, retriableCounts, priorTrialRecord, type TrialState } from "@/lib/engine/state";
 import { priorTrialNotes, turnPrompt } from "@/lib/engine/prompts";
 import { parsePriorTrial } from "@/lib/engine/transcriptImport";
@@ -297,5 +297,16 @@ describe("law of the case on retrial", () => {
     const p2 = parsePriorTrial(c, "Motion in Limine to Exclude Lyrics: denied\nClerk: All rise.");
     expect(p2.motionsHeard).toEqual({ "Motion in Limine to Exclude Lyrics": "denied" });
     expect(p2.excluded).toEqual([]);
+  });
+});
+
+describe("verdict unanimity", () => {
+  it("snaps a decided count to a unanimous poll and leaves a hung count split", () => {
+    const d = coerceDeliberation({ transcript: [], foreperson: "F", keyFactor: "", critique: [], verdicts: [
+      { chargeId: "a", result: "guilty", lesser: null, votesNotGuilty: 4 },
+      { chargeId: "b", result: "not-guilty", lesser: null, votesNotGuilty: 8 },
+      { chargeId: "c", result: "hung", lesser: null, votesNotGuilty: 7 },
+    ] }) as { verdicts: Array<{ result: string; votesNotGuilty: number }> };
+    expect(d.verdicts.map((v) => [v.result, v.votesNotGuilty])).toEqual([["guilty", 0], ["not-guilty", 12], ["hung", 7]]);
   });
 });

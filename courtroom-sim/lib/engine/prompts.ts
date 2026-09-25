@@ -165,7 +165,7 @@ export function deliberationPrompt(c: CaseFile, s: TrialState): string {
     .map((ch) => `${ch.id}: ${ch.name} — elements: ${ch.elements.join("; ")}${ch.lesserIncluded?.length ? ` — lesser included: ${ch.lesserIncluded.join(", ")}` : ""}`)
     .join(" | ")}.
 Counts already dismissed by the judge (verdict must be not-guilty): ${s.dismissedCounts.join(", ") || "none"}.
-The verdict must be unanimous; if jurors cannot agree on a count the result is "hung".
+The verdict must be unanimous; if jurors cannot agree on a count the result is "hung". votesNotGuilty is the FINAL poll: 12 for a not-guilty verdict, 0 for a guilty verdict; only a hung count has a split (e.g. 7). If your deliberation ends with holdouts on a count, that count is "hung", not a verdict.
 Jurors and their current lean (0 certain guilty — 100 certain not guilty). Treat leans as strong priors: jurors at >=60 argue for acquittal, <=40 for conviction; persuadable ones in between follow the strongest arguments grounded in the actual record and reasonable-doubt instruction.
 ${jury}
 
