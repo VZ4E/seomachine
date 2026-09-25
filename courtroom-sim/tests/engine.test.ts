@@ -5,6 +5,7 @@ import { generateVenire, doubtLevel, seated } from "@/lib/engine/jurors";
 import { sanitizeTurn, type CourtTurn } from "@/lib/engine/schema";
 import { activeCase, initRetrial, initTrial, reducer, retriableCounts, priorTrialRecord, type TrialState } from "@/lib/engine/state";
 import { priorTrialNotes, turnPrompt } from "@/lib/engine/prompts";
+import { parsePriorTrial } from "@/lib/engine/transcriptImport";
 import { grade, outcomeOf, rankFor, tierUnlocked } from "@/lib/engine/scoring";
 import { mockDeliberation, mockTurn } from "@/lib/ai/mock";
 import { publicCase } from "@/lib/engine/witness";
@@ -227,5 +228,45 @@ describe("retrial carries the first trial's record", () => {
     const r = initRetrial(c, long, 2);
     expect(priorTrialNotes(c, r, 4000).length).toBeLessThan(6000);
     expect(priorTrialNotes(c, r, 4000)).toContain("further testimony omitted");
+  });
+});
+
+describe("transcript import", () => {
+  it("rebuilds a prior-trial record from pasted text, with verdicts if present", () => {
+    const text = [
+      "Murder: HUNG JURY (7–5 NG)",
+      "Gang Enhancement: NOT GUILTY (9–3 NG)",
+      "Foreperson Susan Thompson · Deciding factor: The witness was inconsistent.",
+      "Clerk: All rise.",
+      "— PRETRIAL —",
+      "Defense (You): Motion to suppress.",
+      "Judge Harlan: Denied.",
+      "— PROSECUTION CASE —",
+      "Ida Witness: I saw him shoot.",
+      "Defense (You): Were you wearing glasses?",
+      "Ida Witness: No.",
+      "Random junk line without a colon",
+    ].join("\n");
+    const p = parsePriorTrial(c, text, { round: 1, acquitted: ["gang-enh"] });
+    expect(p.verdicts).toEqual([
+      { chargeId: "murder", result: "hung", lesser: null, votesNotGuilty: 7 },
+      { chargeId: "gang-enh", result: "not-guilty", lesser: null, votesNotGuilty: 9 },
+    ]);
+    expect(p.keyFactor).toBe("The witness was inconsistent.");
+    expect(p.transcript.map((l) => [l.speaker, l.phase])).toEqual([
+      ["clerk", "arraignment"], ["defense", "pretrial"], ["judge", "pretrial"], ["witness", "prosecution_case"], ["defense", "prosecution_case"], ["witness", "prosecution_case"],
+    ]);
+    // Without verdict lines, acquitted counts are not-guilty and the rest hung.
+    const q = parsePriorTrial(c, "Clerk: All rise.", { acquitted: ["gang-enh"] });
+    expect(q.verdicts.map((v) => v.result)).toEqual(["hung", "not-guilty"]);
+    // The digest works on an imported record.
+    const r = { ...initTrial(c, 1), retrial: { round: 2, acquitted: ["gang-enh"], acquittedNames: ["Gang Enhancement"], prior: [p] } };
+    expect(priorTrialNotes(c, r)).toContain("Q (Defense (You)): Were you wearing glasses? A: No.");
+  });
+  it("tolerates a retrial save written before the record existed", () => {
+    const old = { ...initTrial(c, 1), retrial: { round: 2, acquitted: ["gang-enh"] } } as unknown as TrialState;
+    expect(priorTrialNotes(c, old)).toBe("");
+    expect(turnPrompt(activeCase(c, old), old, { kind: "proceed" })).toContain("ACQUITTED of: gang-enh");
+    expect(activeCase(c, old).charges.map((x) => x.id)).toEqual(["murder"]);
   });
 });
