@@ -9,7 +9,9 @@ import type { CourtTurn, Deliberation } from "@/lib/engine/schema";
 import { grade, outcomeOf, trialPoints } from "@/lib/engine/scoring";
 import { acquittedCounts, initRetrial, initTrial, reducer, type Action, type TrialState } from "@/lib/engine/state";
 import { bareJudge, DEFENDANT_ID, witnessById } from "@/lib/engine/witness";
-import { clearTrial, loadTrial, recordTrial, saveTrial } from "@/lib/career";
+import { clearTrial, loadTrial, recordAppeal, recordTrial, saveTrial } from "@/lib/career";
+import { appliedVerdicts, type AppealRecord } from "@/lib/engine/appeal";
+import Appeal from "./Appeal";
 import { silence, speakLines } from "@/lib/speech/voices";
 import EvidencePanel from "./EvidencePanel";
 import JuryBox from "./JuryBox";
@@ -38,6 +40,7 @@ export default function Trial({ c }: { c: CaseFile }) {
   const [motionId, setMotionId] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<number | null>(null);
   const [gavel, setGavel] = useState(0);
+  const [appealing, setAppealing] = useState(false);
 
   useEffect(() => {
     const saved = loadTrial(c.id);
@@ -130,8 +133,22 @@ export default function Trial({ c }: { c: CaseFile }) {
     setNotice(null);
   };
 
+  const decided = (r: AppealRecord) => {
+    const cur = ref.current!;
+    const before = outcomeOf(cur.deliberation!, cur.dismissedCounts);
+    act({ type: "appealed", appeal: r });
+    const after = outcomeOf({ ...cur.deliberation!, verdicts: appliedVerdicts({ ...cur, appeal: r }) }, cur.dismissedCounts);
+    const pts = trialPoints(cur, after) + r.points;
+    recordAppeal(c.id, before, after, pts, grade(pts, after));
+    setAppealing(false);
+    setGavel((g) => g + 1);
+  };
+
+  if (s.phase === "verdict" && s.deliberation && appealing) {
+    return <main className="px-4"><Appeal c={c} s={s} onDecided={decided} onBack={() => setAppealing(false)} /></main>;
+  }
   if (s.phase === "verdict" && s.deliberation) {
-    return <main className="px-4"><Verdict c={c} s={s} onRestart={restart} onRetrial={retrial} /></main>;
+    return <main className="px-4"><Verdict c={c} s={s} onRestart={restart} onRetrial={retrial} onAppeal={() => setAppealing(true)} /></main>;
   }
 
   const info = phaseInfo(s.phase);

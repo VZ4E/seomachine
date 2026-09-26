@@ -155,6 +155,49 @@ ${recent || "(start of proceedings)"}
 NOW: ${action}`;
 }
 
+/** The appellate panel: rules on the brief against the trial record, count by count. */
+export function appealPrompt(c: CaseFile, s: TrialState, brief: string): string {
+  const d = s.deliberation!;
+  const chName = (id: string) => c.charges.find((x) => x.id === id)?.name ?? id;
+  const evName = (id: string) => c.evidence.find((e) => e.id === id)?.name ?? id;
+  const verdicts = d.verdicts.map((v) => `${v.chargeId} (${chName(v.chargeId)}): ${v.result}${v.lesser ? ` — ${v.lesser}` : ""}, poll ${v.votesNotGuilty}-${12 - v.votesNotGuilty} NG`).join("\n");
+  const convicted = d.verdicts.filter((v) => v.result === "guilty" || v.result === "guilty-lesser").map((v) => v.chargeId);
+  const rulings = s.rulings.map((r) => `[${r.phase}] ${r.on}: ${r.result} (${r.reason})`).join("\n") || "none recorded";
+  const transcript = s.transcript.filter((l) => l.speaker !== "system" || /—/.test(l.text)).map((l) => `${l.name}: ${l.text}`).join("\n").slice(-30000);
+  return `You are a three-judge panel of the intermediate appellate court for ${c.jurisdiction}. Defense counsel has filed a brief appealing the convictions in ${c.title}. Decide it like a real court: on the trial record below and the law of the jurisdiction, applying the correct standard of review to each claim.
+
+STANDARDS:
+- Sufficiency of the evidence: view the record in the light most favorable to the verdict; ask whether ANY rational juror could find each element beyond a reasonable doubt (Jackson v. Virginia). This is deferential. Reverse only if an element has no evidentiary support in the record. Disposition "reversed-insufficient" bars retrial (double jeopardy).
+- Trial error (evidence wrongly admitted or excluded, wrong jury instruction, Brady/Giglio violation, prosecutorial misconduct, ex parte contact, denial of a meritorious motion): reverse only if the error was preserved (or is plain error) AND not harmless beyond a reasonable doubt. Disposition "reversed-error" remands for a new trial on that count.
+- "vacated": the conviction cannot stand for a structural reason (e.g. non-unanimous verdict, count legally impossible on the acquitted counts). Say whether retrial is possible.
+- Inconsistent verdicts are not a ground for reversal. Acquittal on one count does not undo another.
+- Do not reverse because you would have weighed the evidence differently. Do not reverse on arguments that the record contradicts. If the brief asserts facts the transcript does not support, say so and overrule.
+- Rule on every enumeration the brief raises (sustained / overruled / moot). Then give a disposition for EVERY convicted count id: ${convicted.join(", ")}.
+- If you notice a defect the brief missed (plain error), you may act on it and say so in plainError; otherwise null.
+- Write like a court: precise, unsentimental, 3-8 sentences per enumeration. Then, separately, chambers notes critiquing the brief's craft (record citations, placeholder or fabricated citations, hypothetical framing, structure, hedging) and a grade for the brief itself, independent of who won.
+
+CASE FILE (charges, elements, evidence, witnesses):
+${JSON.stringify({ charges: c.charges, evidence: c.evidence.map((e) => ({ id: e.id, name: e.name, description: e.description, weakness: e.weakness, admissibilityIssue: e.admissibilityIssue })), witnesses: c.witnesses.map((w) => ({ id: w.id, name: w.name, role: w.role, side: w.side, priorStatements: w.priorStatements, credibilityIssues: w.credibilityIssues })) })}
+
+VERDICTS:
+${verdicts}
+Counts dismissed by the trial judge: ${s.dismissedCounts.join(", ") || "none"}
+Evidence admitted: ${s.admitted.map(evName).join("; ") || "none recorded"}
+Evidence excluded: ${s.excluded.map(evName).join("; ") || "none"}
+Rulings on motions and objections:
+${rulings}
+Facts exposed on cross: ${s.revealed.map((r) => r.fact).join("; ") || "none"}
+Jury's stated deciding factor: ${d.keyFactor}
+
+TRIAL TRANSCRIPT (the record):
+${transcript || "(no transcript preserved)"}
+
+BRIEF OF APPELLANT:
+${brief.slice(0, 20000)}
+
+Return ONLY JSON matching the schema.`;
+}
+
 export function deliberationPrompt(c: CaseFile, s: TrialState): string {
   const jury = s.jurors
     .filter((j) => j.status === "seated")

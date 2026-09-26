@@ -3,6 +3,7 @@ import type { CaseFile } from "./caseTypes";
 import { JURY_ABSENT, nextPhase, type PhaseId } from "./phases";
 import { clampLean, generateVenire, hashString, prosecutionStrikes, seatJury, type Juror } from "./jurors";
 import type { CourtLineT, CourtTurn, Deliberation, RulingT } from "./schema";
+import { appliedVerdicts, type AppealRecord } from "./appeal";
 
 export type ExamMode = "direct" | "cross" | "redirect";
 
@@ -58,6 +59,8 @@ export interface TrialState {
   deliberation: Deliberation | null;
   /** Set when this trial is a retrial of counts the last jury hung on. Acquitted counts never come back. */
   retrial: RetrialInfo | null;
+  /** The appeal taken from this trial's verdict, once decided. */
+  appeal: AppealRecord | null;
   bail: "remanded" | "released" | null;
   nextId: number;
 }
@@ -84,6 +87,7 @@ export function initTrial(c: CaseFile, seed = hashString(c.id + Date.now())): Tr
     dismissedCounts: [],
     deliberation: null,
     retrial: null,
+    appeal: null,
     bail: null,
     nextId: 1,
   };
@@ -108,8 +112,11 @@ export function activeCase(c: CaseFile, s: TrialState): CaseFile {
 export function retriableCounts(s: TrialState): string[] | null {
   const d = s.deliberation;
   if (!d) return null;
-  const hung = d.verdicts.filter((v) => v.result === "hung" && !s.dismissedCounts.includes(v.chargeId)).map((v) => v.chargeId);
-  const convicted = d.verdicts.some((v) => (v.result === "guilty" || v.result === "guilty-lesser") && !s.dismissedCounts.includes(v.chargeId));
+  // After an appeal, reversed-for-error counts read as "hung" (the State may retry) and
+  // reversed-for-insufficiency counts read as acquittals.
+  const verdicts = appliedVerdicts(s);
+  const hung = verdicts.filter((v) => v.result === "hung" && !s.dismissedCounts.includes(v.chargeId)).map((v) => v.chargeId);
+  const convicted = verdicts.some((v) => (v.result === "guilty" || v.result === "guilty-lesser") && !s.dismissedCounts.includes(v.chargeId));
   return hung.length && !convicted ? hung : null;
 }
 
@@ -131,7 +138,7 @@ export function priorTrialRecord(prev: TrialState): PriorTrial {
   const d = prev.deliberation;
   return {
     round: prev.retrial?.round ?? 1,
-    verdicts: d?.verdicts ?? [],
+    verdicts: appliedVerdicts(prev),
     keyFactor: d?.keyFactor ?? "",
     critique: d?.critique ?? [],
     bail: prev.bail,
@@ -183,6 +190,7 @@ export type Action =
   | { type: "excuseForCause"; jurorId: number }
   | { type: "seatJury" }
   | { type: "deliberated"; result: Deliberation }
+  | { type: "appealed"; appeal: AppealRecord }
   | { type: "load"; state: TrialState };
 
 function push(s: TrialState, lines: Array<Omit<TranscriptLine, "id">>): TrialState {
@@ -295,6 +303,8 @@ export function reducer(s: TrialState, a: Action): TrialState {
       return { ...s, jurors: finalizeJury(s.jurors) };
     case "deliberated":
       return { ...s, deliberation: a.result, phase: "verdict" };
+    case "appealed":
+      return { ...s, appeal: a.appeal };
   }
 }
 

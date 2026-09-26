@@ -1,5 +1,6 @@
 // Offline court used when OPENROUTER_API_KEY is not set. Rule-based but playable:
 // keyword overlap with a witness's hidden facts reveals them, motion merit decides rulings.
+import type { AppealOpinion } from "@/lib/engine/appeal";
 import type { CaseFile } from "../engine/caseTypes";
 import { GROUNDS } from "../engine/objections";
 import { JURY_ABSENT, phaseInfo } from "../engine/phases";
@@ -170,6 +171,32 @@ export function mockTurn(c: CaseFile, s: TrialState, input: PlayerInput): CourtT
     t.lines.push({ ...J, text: "Thank you, counsel." });
   }
   return t;
+}
+
+/** Offline appellate panel: affirms unless the brief plausibly attacks an element with nothing behind it in the record. */
+export function mockAppeal(c: CaseFile, s: TrialState, brief: string): AppealOpinion {
+  const d = s.deliberation!;
+  const convicted = d.verdicts.filter((v) => v.result === "guilty" || v.result === "guilty-lesser");
+  const text = brief.toLowerCase();
+  const sufficiency = /insufficien|jackson v\. virginia|no rational|constructive possession|equal access/.test(text);
+  const heads = brief.split(/\n/).filter((l) => /^enumeration|^argument|^issue|^point\s+[ivx\d]/i.test(l.trim())).slice(0, 6);
+  return {
+    court: `Court of Appeals (${c.jurisdiction})`,
+    summary: sufficiency && s.revealed.length >= 2
+      ? "The convictions are reversed for insufficient evidence on this record, and retrial is barred."
+      : "The convictions are affirmed. The evidence, viewed in the light most favorable to the verdict, permitted a rational juror to find each element.",
+    enumerations: (heads.length ? heads : ["Enumeration of Error I"]).map((h) => ({
+      title: h.trim(),
+      ruling: sufficiency && s.revealed.length >= 2 ? "sustained" as const : "overruled" as const,
+      reasoning: sufficiency && s.revealed.length >= 2
+        ? `The defense exposed ${s.revealed.length} facts on cross that the State never answered, leaving the contested element without rational support.`
+        : "Appellant asks this court to reweigh the evidence. That is the jury's province, not ours.",
+    })),
+    counts: convicted.map((v) => ({ chargeId: v.chargeId, disposition: sufficiency && s.revealed.length >= 2 ? "reversed-insufficient" as const : "affirmed" as const, reason: "Offline panel." })),
+    plainError: null,
+    critique: ["Offline mock panel — add an OpenRouter key for a real appellate opinion.", `The brief raised ${heads.length || 1} enumeration(s).`],
+    briefGrade: brief.length > 1500 ? "B" : "C",
+  };
 }
 
 export function mockDeliberation(c: CaseFile, s: TrialState): Deliberation {

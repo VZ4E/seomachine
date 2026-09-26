@@ -3,19 +3,24 @@ import Link from "next/link";
 import type { CaseFile } from "@/lib/engine/caseTypes";
 import { grade, outcomeOf, trialPoints } from "@/lib/engine/scoring";
 import { acquittedCounts, retriableCounts, type TrialState } from "@/lib/engine/state";
+import { appliedVerdicts, canAppeal } from "@/lib/engine/appeal";
+import { OpinionPanel } from "./Appeal";
 
 const LABEL = { "not-guilty": "NOT GUILTY", guilty: "GUILTY", hung: "HUNG JURY", "guilty-lesser": "GUILTY (lesser)" } as const;
 const COLOR = { "not-guilty": "text-acquit", guilty: "text-guilty", hung: "text-caution", "guilty-lesser": "text-caution" } as const;
 const HEADLINE = { acquittal: "Your client walks free.", hung: "Mistrial: the jury is hung.", partial: "A split verdict.", conviction: "Your client is convicted." };
+const APPEAL_HEADLINE = { acquittal: "Reversed on appeal. Your client walks free.", hung: "Reversed and remanded. The State may retry.", partial: "Reversed in part.", conviction: "Affirmed. The conviction stands." };
 
-export default function Verdict({ c, s, onRestart, onRetrial }: { c: CaseFile; s: TrialState; onRestart: () => void; onRetrial: () => void }) {
+export default function Verdict({ c, s, onRestart, onRetrial, onAppeal }: { c: CaseFile; s: TrialState; onRestart: () => void; onRetrial: () => void; onAppeal: () => void }) {
   const d = s.deliberation!;
-  const outcome = outcomeOf(d, s.dismissedCounts);
+  const jury = { ...d, verdicts: appliedVerdicts(s) }; // verdicts as they stand after any appeal
+  const outcome = outcomeOf(jury, s.dismissedCounts);
+  const juryOutcome = outcomeOf(d, s.dismissedCounts);
   const prior = acquittedCounts(s);
   const hung = retriableCounts(s);
   const chargeName = (id: string) => c.charges.find((x) => x.id === id)?.name ?? id;
   const finalCount = prior.length + d.verdicts.length - (hung?.length ?? 0); // counts the State can never bring again
-  const pts = trialPoints(s, outcome);
+  const pts = trialPoints(s, outcome) + (s.appeal?.points ?? 0);
   const g = grade(pts, outcome);
   const top = [...s.score].sort((a, b) => Math.abs(b.points) - Math.abs(a.points)).slice(0, 8);
 
@@ -23,7 +28,8 @@ export default function Verdict({ c, s, onRestart, onRetrial }: { c: CaseFile; s
     <div className="mx-auto max-w-4xl space-y-5 py-6">
       <div className="panel p-6 text-center">
         <p className="text-sm uppercase tracking-[0.3em] text-brass">{s.retrial ? `Retrial · round ${s.retrial.round} · ` : ""}The jury has reached a verdict</p>
-        <h1 className="mt-2 font-serif text-4xl font-bold">{HEADLINE[outcome]}</h1>
+        <h1 className="mt-2 font-serif text-4xl font-bold">{s.appeal ? APPEAL_HEADLINE[outcome] : HEADLINE[outcome]}</h1>
+        {s.appeal && <p className="mt-1 text-sm text-ink">The jury said: {HEADLINE[juryOutcome].replace(/\.$/, "")}. Struck-through counts were reversed on appeal.</p>}
         <div className="mt-4 space-y-1">
           {prior.map((id) => (
             <p key={id} className="font-serif text-xl text-ink">
@@ -33,10 +39,14 @@ export default function Verdict({ c, s, onRestart, onRetrial }: { c: CaseFile; s
           ))}
           {d.verdicts.map((v) => {
             const ch = c.charges.find((x) => x.id === v.chargeId);
+            const after = jury.verdicts.find((x) => x.chargeId === v.chargeId)!;
+            const changed = after.result !== v.result;
             return (
               <p key={v.chargeId} className="font-serif text-xl">
-                {ch?.name ?? v.chargeId}: <span className={`font-bold ${COLOR[v.result]}`}>{LABEL[v.result]}{v.lesser ? ` — ${v.lesser}` : ""}</span>
-                <span className="ml-2 text-sm text-ink">({v.votesNotGuilty}–{12 - v.votesNotGuilty} NG)</span>
+                {ch?.name ?? v.chargeId}:{" "}
+                <span className={`font-bold ${COLOR[v.result]} ${changed ? "line-through opacity-60" : ""}`}>{LABEL[v.result]}{v.lesser ? ` — ${v.lesser}` : ""}</span>
+                {changed && <span className={`ml-2 font-bold ${COLOR[after.result]}`}>{after.result === "not-guilty" ? "REVERSED · ACQUITTED" : "REVERSED · NEW TRIAL"}</span>}
+                {!changed && <span className="ml-2 text-sm text-ink">({v.votesNotGuilty}–{12 - v.votesNotGuilty} NG)</span>}
               </p>
             );
           })}
@@ -52,6 +62,8 @@ export default function Verdict({ c, s, onRestart, onRetrial }: { c: CaseFile; s
           <div><p className="text-xs text-ink">Career points</p><p className="font-serif text-3xl">{pts}</p></div>
         </div>
       </div>
+
+      {s.appeal && <OpinionPanel c={c} r={s.appeal} />}
 
       <div className="grid gap-5 md:grid-cols-2">
         <div className="panel p-5">
@@ -88,7 +100,8 @@ export default function Verdict({ c, s, onRestart, onRetrial }: { c: CaseFile; s
 
       <div className="flex justify-center gap-3">
         <Link href="/" className="brass-btn">Back to docket</Link>
-        {hung && <button onClick={onRetrial} className="brass-btn">Retry the hung {hung.length === 1 ? "count" : "counts"}</button>}
+        {canAppeal(s) && <button onClick={onAppeal} className="brass-btn">File an appeal</button>}
+        {hung && <button onClick={onRetrial} className="brass-btn">{s.appeal ? "Defend the retrial" : `Retry the hung ${hung.length === 1 ? "count" : "counts"}`}</button>}
         <button onClick={onRestart} className="ghost-btn">{hung ? "Restart from scratch" : "Retry this case"}</button>
       </div>
     </div>
