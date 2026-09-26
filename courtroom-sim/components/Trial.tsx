@@ -12,7 +12,8 @@ import { bareJudge, DEFENDANT_ID, witnessById } from "@/lib/engine/witness";
 import { clearTrial, loadTrial, recordAppeal, recordTrial, saveTrial } from "@/lib/career";
 import { appliedVerdicts, type AppealRecord } from "@/lib/engine/appeal";
 import Appeal from "./Appeal";
-import { silence, speakLines } from "@/lib/speech/voices";
+import { playLines, silence } from "@/lib/speech/voices";
+import Courtroom, { type Flash, type LiveLine } from "./Courtroom";
 import EvidencePanel from "./EvidencePanel";
 import JuryBox from "./JuryBox";
 import Lectern from "./Lectern";
@@ -41,6 +42,10 @@ export default function Trial({ c }: { c: CaseFile }) {
   const [challenge, setChallenge] = useState<number | null>(null);
   const [gavel, setGavel] = useState(0);
   const [appealing, setAppealing] = useState(false);
+  const [live, setLive] = useState<LiveLine | null>(null);
+  const [flash, setFlash] = useState<Flash | null>(null);
+  const [scene, setScene] = useState(true);
+  const stamp = (kind: Flash["kind"], text: string) => setFlash({ kind, text, key: Date.now() });
 
   useEffect(() => {
     const saved = loadTrial(c.id);
@@ -74,7 +79,14 @@ export default function Trial({ c }: { c: CaseFile }) {
       if (data.warning) setNotice(data.warning);
       if (data.turn.ruling) setGavel((g) => g + 1);
       act({ type: "turn", turn: data.turn, objectionByDefense: input.kind === "objection" });
-      await speakLines(data.turn.lines, voices);
+      if (data.turn.prosecutorObjected) stamp("objection", "OBJECTION!");
+      const lines = data.turn.lines;
+      await playLines(lines, voices, (i) => setLive(i === null ? null : { speaker: lines[i].speaker, name: lines[i].name, text: lines[i].text }));
+      const r = data.turn.ruling;
+      if (r) {
+        const k = r.result === "sustained" || r.result === "overruled" ? r.result : r.result === "denied" ? "denied" : "granted";
+        stamp(k, r.result.toUpperCase().replace("-", " "));
+      }
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "The court is in recess (network error). Try again.");
     } finally {
@@ -159,7 +171,9 @@ export default function Trial({ c }: { c: CaseFile }) {
   const onSpeak = (text: string) => {
     silence();
     act({ type: "say", speaker: "defense", name: YOU, text });
+    setLive({ speaker: "defense", name: YOU, text });
     const obj = detectObjection(text);
+    if (obj) stamp("objection", "OBJECTION!");
     if (obj) return send({ kind: "objection", groundId: obj.ground?.id ?? null, text });
     if (s.phase === "pretrial" && motionId) { const m = motionId; setMotionId(null); return send({ kind: "motion", motionId: m, text }); }
     if (s.phase === "voir_dire" && challenge) {
@@ -178,6 +192,8 @@ export default function Trial({ c }: { c: CaseFile }) {
     const g = GROUNDS.find((x) => x.id === groundId)!;
     const text = `Objection, Your Honor — ${g.label.toLowerCase()}.`;
     act({ type: "say", speaker: "defense", name: YOU, text });
+    setLive({ speaker: "defense", name: YOU, text });
+    stamp("objection", "OBJECTION!");
     send({ kind: "objection", groundId, text });
   };
 
@@ -311,6 +327,10 @@ export default function Trial({ c }: { c: CaseFile }) {
             <input type="checkbox" checked={voices} onChange={(e) => { setVoices(e.target.checked); if (!e.target.checked) silence(); }} className="accent-[#c9a45c]" />
             Court voices
           </label>
+          <label className="flex items-center gap-1 text-ink">
+            <input type="checkbox" checked={scene} onChange={(e) => setScene(e.target.checked)} className="accent-[#c9a45c]" />
+            Live scene
+          </label>
           <button onClick={() => { if (confirm("Restart this trial from arraignment?")) restart(); }} className="ghost-btn px-2 py-1 text-xs">Restart</button>
         </div>
       </header>
@@ -333,7 +353,8 @@ export default function Trial({ c }: { c: CaseFile }) {
             )}
           </div>
 
-          <div className="panel h-[46vh] min-h-72 p-4 lg:h-[56vh]">
+          {scene && <Courtroom c={c} s={s} witness={witness} live={live} flash={flash} juryPresent={juryPresent} />}
+          <div className={`panel p-4 ${scene ? "h-[30vh] min-h-56" : "h-[46vh] min-h-72 lg:h-[56vh]"}`}>
             <Transcript lines={s.transcript} pending={busy} />
           </div>
 

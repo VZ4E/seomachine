@@ -45,6 +45,53 @@ export function speakLines(lines: Array<{ speaker: string; text: string }>, enab
   });
 }
 
+let generation = 0;
+
+/**
+ * Plays lines one at a time and reports which line is live, so the courtroom scene can animate the
+ * speaker. With voices on, timing follows speech synthesis. With voices off, each line stays up
+ * long enough to read. Cancelled by silence().
+ */
+export function playLines(
+  lines: Array<{ speaker: string; text: string }>,
+  enabled: boolean,
+  onLine: (index: number | null) => void,
+): Promise<void> {
+  const gen = ++generation;
+  const alive = () => gen === generation;
+  const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
+  if (!lines.length) { onLine(null); return Promise.resolve(); }
+  if (!enabled || !synth) {
+    return new Promise((resolve) => {
+      let i = 0;
+      const step = () => {
+        if (!alive()) return resolve();
+        if (i >= lines.length) { onLine(null); return resolve(); }
+        onLine(i);
+        const ms = Math.min(5200, 900 + lines[i].text.length * 34);
+        i++;
+        window.setTimeout(step, ms);
+      };
+      step();
+    });
+  }
+  const vs = voices();
+  return new Promise((resolve) => {
+    let remaining = lines.length;
+    lines.forEach((l, i) => {
+      const p = PROFILE[(l.speaker as Role) in PROFILE ? (l.speaker as Role) : "witness"];
+      const u = new SpeechSynthesisUtterance(l.text);
+      u.pitch = p.pitch;
+      u.rate = p.rate;
+      if (vs.length) u.voice = vs[p.voiceIndex % vs.length];
+      u.onstart = () => { if (alive()) onLine(i); };
+      u.onend = u.onerror = () => { if (--remaining === 0) { if (alive()) onLine(null); resolve(); } };
+      synth.speak(u);
+    });
+  });
+}
+
 export function silence() {
+  generation++;
   if (typeof window !== "undefined") window.speechSynthesis?.cancel();
 }
